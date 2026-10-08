@@ -4,6 +4,19 @@ A Windows calibration utility that reduces content-dependent OLED dimming using 
 
 ![OLED Anti-Dimming application and correction summary](assets/documentation/application.png)
 
+## Tutorial
+
+![Example camera placement during calibration](assets/documentation/camera-setup.png)
+
+1. Enable HDR or Advanced Color management in Windows as appropriate for your display.
+2. Place the camera as close as possible to the center of the screen. The center reference patch should fill the camera's view.
+3. Select the camera and display, set the panel peak-brightness sampling limit (default 1,000 nits), then create a new calibration.
+4. Review the correction and validation summaries, then choose **Apply system wide**.
+
+Windows requests administrator access for the application. Windows manages ICC profiles and VCGT calibration; this utility does not apply them separately. Calibration data persists under `%LOCALAPPDATA%\OledCalibration\data`, independently of executable versions. Packaged helpers are extracted automatically on first launch.
+
+The sampling limit bounds calibration stimuli; it does not clamp output. Compensation is limited by the monitor's available brightness headroom. Relative webcam matching cannot establish absolute luminance or accurate colorimetry, and the display's physical full-screen brightness limit remains unavoidable.
+
 ## Existing features
 
 - **APL-dependent dimming compensation.** Counters brightness changes caused by average picture level and the scene's color distribution. Applies a uniform multiplier in linear color space to preserve channel ratios.
@@ -16,17 +29,6 @@ A Windows calibration utility that reduces content-dependent OLED dimming using 
 
 - **Custom EOTF targets.** Currently targets PQ (SMPTE ST 2084). Planned options include custom highlight roll-offs and advanced, headroom-aware tone mapping, including investigation of SMPTE ST 2094-50. Apple's [Headroom Adaptive Gain Curve](https://developer.apple.com/documentation/colorsync/headroom-adaptive-gain-curve) uses this metadata standard; its [EDR rendering pipeline](https://developer.apple.com/videos/play/wwdc2021/10161/) is a related reference for adapting content to available display headroom. These tone-mapping options are not implemented yet.
 - **Improve calibration speed.** Reduce measurement and convergence time while retaining sufficient coverage of color and brightness distributions.
-
-## Using the application
-
-1. Enable HDR or Advanced Color management in Windows as appropriate for your display.
-2. Place the camera as close as possible to the center of the screen. The center reference patch should fill the camera's view.
-3. Select the camera and display, set the panel peak-brightness sampling limit (default 1,000 nits), then create a new calibration.
-4. Review the correction and validation summaries, then choose **Apply system wide**.
-
-Windows requests administrator access for the application. Windows manages ICC profiles and VCGT calibration; this utility does not apply them separately. Calibration data persists under `%LOCALAPPDATA%\OledCalibration\data`, independently of executable versions. Packaged helpers are extracted automatically on first launch.
-
-The sampling limit bounds calibration stimuli; it does not clamp output. Compensation is limited by the monitor's available brightness headroom. Relative webcam matching cannot establish absolute luminance or accurate colorimetry, and the display's physical full-screen brightness limit remains unavoidable.
 
 ## Design
 
