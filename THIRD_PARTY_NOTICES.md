@@ -4,6 +4,10 @@ The DWM hook is a derivative of [ledoge/dwm_lut](https://github.com/ledoge/dwm_l
 
 [MinHook](https://github.com/TsudaKageyu/minhook) uses a BSD-style license, supplied in `external/minhook/LICENSE.txt`.
 
+The standalone executable includes the .NET 10 runtime and Windows Desktop
+runtime under their MIT licenses. Their license texts and runtime third-party
+notices are supplied in `assets/licenses/` and embedded in the executable payload.
+
 Windows SDK debugger binaries are obtained from the installed Windows SDK at
 build time for local symbol resolution. The source repository does not contain
 them; the standalone executable payload includes the debugger helper DLLs used

@@ -18,6 +18,7 @@ Copy-Item -LiteralPath "$projectRoot/THIRD_PARTY_NOTICES.md" -Destination $paylo
 Copy-Item -LiteralPath "$projectRoot/LICENSE" -Destination "$payloadRoot/licenses/GPL-3.0.txt" -Force
 Copy-Item -LiteralPath "$projectRoot/external/minhook/LICENSE.txt" -Destination "$payloadRoot/licenses/MinHook.txt" -Force
 Copy-Item -LiteralPath "$projectRoot/external/dwm_lut/LICENSE-THIRD-PARTY" -Destination "$payloadRoot/licenses/dwm-lut-third-party.txt" -Force
+Copy-Item -Path "$projectRoot/assets/licenses/*" -Destination "$payloadRoot/licenses" -Force
 Compress-Archive -Path "$payloadRoot/*" -DestinationPath "$projectRoot/build/standalone-payload.zip" -Force
 dotnet publish "$projectRoot/desktop/OledCalibration.csproj" -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=embedded -p:StandalonePackage=true -o "$projectRoot/$OutputDirectory"
 if($LASTEXITCODE -ne 0){throw 'Single executable publish failed'}
