@@ -1,3 +1,7 @@
+Current builds use [controlled filter unloading](controlled-unload.md). The
+resident-toggle discussion below describes the earlier architecture and crash
+investigation; only the admission bridge remains pinned in the current design.
+
 # Enable/disable stability fix
 
 ## Root-cause investigation: private leaf register contract

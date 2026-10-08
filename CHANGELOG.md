@@ -2,6 +2,8 @@
 
 ## 0.3.0 (beta)
 
+- Fixed stale fullscreen frames when an empty damage list indicates a full-frame update.
+- Added controlled filter unloading: drain callbacks, release resources, and unload the filter DLL when disabling. A small inactive safety bridge stays resident.
 - Added Quality (~60,000 cells), Balanced (~25,000), Performance (~10,000), and Custom screen sampling densities, with aspect-aware grids.
 - Calibration now counts exact generated pattern distributions, including the full reference mosaic, instead of subsampling known patterns.
 - New calibrations use normalized inverse-distance interpolation of measured corrections, avoiding the Gaussian RBF fallback toward unity in sparse regions.

@@ -14,7 +14,7 @@ Double-clicking the icon or choosing Open restores it. Launching a second copy
 signals the existing instance instead of creating a second controller.
 
 - Exit stops any calibration gracefully and leaves the current filter active.
-- Disable filter and exit also removes the DWM detours before closing. Failure
+- Disable filter and exit also removes the detours and unloads the filter DLL before closing. Failure
   leaves the application running and reports the error in a tray notification.
 
 Start with Windows registers a per-user Task Scheduler logon task with the user's
@@ -29,8 +29,8 @@ The native hook exports an atomic status word. The GUI reads it from the current
 session's DWM process without executing a remote query or changing the hook,
 refreshing on open, after filter operations, and periodically. A resident DLL
 with disabled detours reports Disabled. Older hooks without the status export
-report Unavailable, rather than guessing from stale marker files. Updating a
-resident hook still requires signing out first.
+report Unavailable, rather than guessing from stale marker files. New hooks use [controlled unloading](controlled-unload.md); older pinned hooks
+require one sign-out to transition. The small admission bridge remains resident.
 
 Offline checks cover percentage/RMS calculations, empty summaries, the two-tab
 layout, and hide-versus-exit behavior. Live sign-in and filter interaction require

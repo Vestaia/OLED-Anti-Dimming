@@ -143,8 +143,8 @@ static class Backend
         File.WriteAllText(Path.Combine(stage, "profile.cube"), "LUT_3D_SIZE 2\n0 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1\n");
         if (!new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator))
             throw new Exception("Filter files are prepared. Restart this GUI as administrator to apply to DWM; camera calibration can run without elevation.");
-        bool resident = Injector.IsLoaded();
         Disable();
+        bool resident = Injector.IsLoaded();
         var runtime = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Temp", "oled-apl");
         Directory.CreateDirectory(runtime);
         var luts = Path.Combine(runtime, "luts");
@@ -163,6 +163,16 @@ static class Backend
                 File.Delete(dst);
         }
         File.Copy(Path.Combine(stage, "profile.cube"), Path.Combine(luts, $"{screen.Bounds.Left}_{screen.Bounds.Top}{(hdr ? "_hdr" : "")}.cube"), true);
+        var bridge = Path.Combine(runtime, "oled-hook-bridge.dll");
+        var bridgeSource = Path.Combine(root, "build", "oled-hook-bridge.dll");
+        if (!File.Exists(bridge) || !System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(bridgeSource)).SequenceEqual(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(bridge))))
+        {
+            try
+            {
+                File.Copy(bridgeSource, bridge, true);
+            }
+            catch (IOException) { throw new Exception("The resident unload bridge has changed. Sign out once before applying this build."); }
+        }
         var dll = Path.Combine(runtime, "oled-apl-hook.dll");
         string hookSource = Path.Combine(root, "build", "oled-apl-hook.dll");
         string binding = screen.DeviceName + "|" + hdr + "|" + screen.Bounds.ToString();
@@ -192,7 +202,10 @@ static class Backend
         if (resident)
             Injector.Control(true);
         else
+        {
+            Injector.Load(bridge);
             Injector.Load(dll);
+        }
         RefreshDesktop();
         log("DWM hook loaded for " + screen.DeviceName + "; full desktop redraw requested");
     }
@@ -218,7 +231,7 @@ static class Backend
     {
         if (Injector.IsLoaded())
         {
-            Injector.Control(false);
+            Injector.Unload();
             RefreshDesktop();
         }
     }
@@ -421,7 +434,9 @@ static class Injector
     });
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern IntPtr LoadLibraryEx(string path, IntPtr file, uint flags);
     [DllImport("kernel32.dll")] static extern bool FreeLibrary(IntPtr module);
-    public static void Control(bool enable) => AsSystem(() =>
+    public static void Control(bool enable) => InvokeControl(enable, false);
+    public static void Unload() => InvokeControl(false, true);
+    static void InvokeControl(bool enable, bool unload) => AsSystem(() =>
     {
         bool found = false;
         foreach (var p in Targets())
@@ -436,7 +451,10 @@ static class Injector
                         throw Error("Read resident filter exports");
                     try
                     {
-                        var export = GetProcAddress(local, "OledFilterControl");
+                        var export = unload ? GetProcAddress(local, "OledPrepareUnload") : IntPtr.Zero;
+                        bool canUnload = export != IntPtr.Zero;
+                        if (!canUnload)
+                            export = GetProcAddress(local, "OledFilterControl");
                         if (export == IntPtr.Zero)
                             throw new Exception("The loaded hook uses unsafe unloading. Sign out and back in before using this corrected build.");
                         var handle = OpenProcess(0x1f0fff, false, (uint)p.Id);
@@ -444,7 +462,14 @@ static class Injector
                             throw Error("Open DWM for filter control");
                         try
                         {
-                            RemoteAt(handle, new IntPtr(module.BaseAddress.ToInt64() + export.ToInt64() - local.ToInt64()), enable ? new IntPtr(1) : IntPtr.Zero, "OledFilterControl");
+                            RemoteAt(handle, new IntPtr(module.BaseAddress.ToInt64() + export.ToInt64() - local.ToInt64()), enable ? new IntPtr(1) : IntPtr.Zero, canUnload ? "OledPrepareUnload" : "OledFilterControl");
+                            if (canUnload)
+                            {
+                                Remote(handle, "FreeLibrary", module.BaseAddress);
+                                using var verify = Process.GetProcessById(p.Id);
+                                if (verify.Modules.Cast<ProcessModule>().Any(m => m.ModuleName.Equals(Name, StringComparison.OrdinalIgnoreCase)))
+                                    throw new Exception("The filter DLL is still resident after teardown. Sign out before replacing it.");
+                            }
                         }
                         finally { CloseHandle(handle); }
                     }
@@ -454,7 +479,7 @@ static class Injector
         if (enable && !found)
             throw new Exception("No resident filter in this session");
         if (File.Exists(Marker))
-            File.WriteAllText(Marker, enable ? "Enabled" : "Bypassed (DLL resident)");
+            File.WriteAllText(Marker, enable ? "Enabled" : "Disabled");
     });
-    public static void Unload() => Control(false);
+
 }

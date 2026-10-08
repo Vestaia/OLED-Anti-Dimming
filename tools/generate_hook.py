@@ -195,8 +195,12 @@ for signature in ['bool COverlayContext_IsCandidateDirectFlipCompatbile_hook_24h
 source=source.replace('    bool applied=damage&&SafeDisplayCoreApply(overlay,damage->start,int(damage->end-damage->start));','''    bool applied=false;
     {
         std::lock_guard<std::recursive_mutex> lock(filterMutex);
-        if(filterEnabled&&damage&&damage->start&&damage->end>=damage->start&&damage->end-damage->start<=16384)
-            applied=SafeDisplayCoreApply(overlay,damage->start,int(damage->end-damage->start));
+        if(filterEnabled&&damage) {
+            if(damage->start==damage->end)
+                applied=SafeDisplayCoreApply(overlay,nullptr,0);
+            else if(damage->start&&damage->end>=damage->start&&damage->end-damage->start<=16384)
+                applied=SafeDisplayCoreApply(overlay,damage->start,int(damage->end-damage->start));
+        }
         if(applied)SetLUTActive(self);else UnsetLUTActive(self);
     }''')
 source=source.replace('    if(applied)SetLUTActive(self);else UnsetLUTActive(self);\n    RECT full','    RECT full')
@@ -226,5 +230,51 @@ source=source.replace('        hookLog(ex.what());','        hookLog(ex.what());
 # Never perform MinHook/COM teardown under loader lock at process termination.
 start=source.index('\tcase DLL_PROCESS_DETACH:');end=source.index('\tdefault:',start)
 source=source[:start]+'\tcase DLL_PROCESS_DETACH:\n\t\tbreak;\n'+source[end:]
+
+# Admission and return tracking live in a resident bridge, outside this DLL.
+source=source.replace('            HMODULE pinned=nullptr;\n            if(!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_PIN,(LPCWSTR)&OledFilterControl,&pinned)){hookLog("Cannot pin filter callbacks");return FALSE;}','')
+source=source.replace('extern "C" bool OledOverlaysEnabledThunk(void*);','''
+using BridgeConfigure = void(*)(void**,void**);
+using BridgeClose = BOOL(*)(BOOL(*)());
+BridgeClose bridgeClose=nullptr;
+void* bridgeDetours[3]{};
+void* bridgeEntries[3]{};
+BridgeConfigure bridgeConfigure=nullptr;
+bool InitializeBridge() {
+    auto module=GetModuleHandleW(L"oled-hook-bridge.dll");
+    if(!module)return false;
+    bridgeConfigure=(BridgeConfigure)GetProcAddress(module,"OledBridgeConfigure");
+    bridgeClose=(BridgeClose)GetProcAddress(module,"OledBridgeClose");
+    bridgeDetours[0]=(void*)GetProcAddress(module,"OledBridgePresent");
+    bridgeDetours[1]=(void*)GetProcAddress(module,"OledBridgeDirectFlip");
+    bridgeDetours[2]=(void*)GetProcAddress(module,"OledOverlaysEnabledThunk");
+    bridgeEntries[0]=(void*)COverlayContext_Present_orig_24h2;
+    bridgeEntries[1]=(void*)COverlayContext_IsCandidateDirectFlipCompatbile_orig_24h2;
+    bridgeEntries[2]=(void*)COverlayContext_OverlaysEnabled_orig;
+    return bridgeConfigure&&bridgeClose&&bridgeDetours[0]&&bridgeDetours[1]&&bridgeDetours[2];
+}
+BOOL DisableForUnload() {auto status=MH_DisableHook(MH_ALL_HOOKS);return status==MH_OK||status==MH_ERROR_DISABLED;}
+extern "C" __declspec(dllexport) DWORD WINAPI OledPrepareUnload(void*) {
+    {std::lock_guard<std::recursive_mutex> lock(filterMutex);filterEnabled=false;}
+    if(!bridgeClose||!bridgeClose(DisableForUnload)){InterlockedExchange(&OledFilterState,2);hookLog("Unload drain failed; DLL retained");return 0;}
+    if(MH_Uninitialize()!=MH_OK){InterlockedExchange(&OledFilterState,2);return 0;}
+    std::lock_guard<std::recursive_mutex> lock(filterMutex);
+    adaptive=AdaptiveFilter{};adaptiveInitialized=false;dwmState=DwmContextState{};
+    UninitializeStuff();
+    InterlockedExchange(&OledFilterState,0);
+    return 1;
+}
+''')
+source=source.replace('                if(!hookStatus(MH_CreateHook((PVOID)COverlayContext_Present_orig_24h2', '                if(!InitializeBridge()){hookLog("Resident bridge unavailable");return FALSE;}\n                if(!hookStatus(MH_CreateHook((PVOID)COverlayContext_Present_orig_24h2')
+source=source.replace('(PVOID)COverlayContext_Present_hook_24h2,(PVOID*)&', '(PVOID)bridgeDetours[0],(PVOID*)&')
+source=source.replace('(PVOID)COverlayContext_IsCandidateDirectFlipCompatbile_hook_24h2,(PVOID*)&', '(PVOID)bridgeDetours[1],(PVOID*)&')
+source=source.replace('(PVOID)OledOverlaysEnabledThunk,(PVOID*)&', '(PVOID)bridgeDetours[2],(PVOID*)&')
+source=source.replace('            if(!hookStatus(MH_EnableHook(MH_ALL_HOOKS),"Enable"))', '''            void* callbacks[]{(void*)COverlayContext_Present_hook_24h2,(void*)COverlayContext_IsCandidateDirectFlipCompatbile_hook_24h2,(void*)OledOverlaysEnabledImpl};
+            bridgeConfigure(callbacks,bridgeEntries);
+            if(!hookStatus(MH_EnableHook(MH_ALL_HOOKS),"Enable"))''')
+source=source.replace('bool filterReload=false;', 'bool filterReload=false;bool unloadRequested=false;')
+source=source.replace('lock(filterMutex);filterEnabled=enable;', 'lock(filterMutex);if(unloadRequested)return 0;filterEnabled=enable;')
+source=source.replace('lock(filterMutex);filterEnabled=false;}', 'lock(filterMutex);unloadRequested=true;filterEnabled=false;}')
+source=source.replace('if(!hookStatus(MH_EnableHook(MH_ALL_HOOKS),"Enable")){filterEnabled=false;InterlockedExchange(&OledFilterState,2);return FALSE;}', 'if(!hookStatus(MH_EnableHook(MH_ALL_HOOKS),"Enable")){filterEnabled=false;InterlockedExchange(&OledFilterState,2);if(bridgeClose(DisableForUnload)){MH_Uninitialize();return FALSE;}return TRUE;}')
 (root/'build/hook.cpp').write_text(source,encoding='utf-8')
 (root/'build/filter_shader.hpp').write_text('static const char* filterShader=R"APL('+ (root/'native/adaptive_filter.hlsl').read_text() +')APL";',encoding='utf-8')

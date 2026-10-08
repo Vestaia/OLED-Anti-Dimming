@@ -73,7 +73,7 @@ int main(int argc, char **argv)
                 for (size_t i = 0; i < pixels.size(); i += 4)
                     pixels[i] = pixels[i + 1] = pixels[i + 2] = float(value * 250 / 80);
                 ctx->UpdateSubresource(scene.Get(), 0, nullptr, pixels.data(), d.Width * 16, 0);
-                filter.prepare(device.Get(), ctx.Get(), scene.Get(), scene.Get(), &full, 1, nullptr,
+                filter.prepare(device.Get(), ctx.Get(), scene.Get(), scene.Get(), nullptr, 0, nullptr,
                                0, true, sampler.Get());
                 ctx->CopyResource(staging.Get(), filter.result.Get());
                 AdaptiveFilter::require(ctx->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped));

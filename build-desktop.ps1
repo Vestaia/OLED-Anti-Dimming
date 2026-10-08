@@ -21,6 +21,8 @@ if errorlevel 1 exit /b 1
 lib /nologo /out:minhook.lib buffer.obj hook.obj trampoline.obj hde64.obj
 ml64 /nologo /c /Fooverlay_hook.obj "$projectRoot\native\overlay_hook.asm"
 if errorlevel 1 exit /b 1
+cl /nologo /LD /EHsc /std:c++17 /O2 /DUNICODE /D_UNICODE "$projectRoot\native\hook_bridge.cpp" overlay_hook.obj /Fe:oled-hook-bridge.dll /link /EXPORT:OledOverlaysEnabledThunk
+if errorlevel 1 exit /b 1
 cl /nologo /LD /EHsc /std:c++17 /O2 /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS /I"$projectRoot\native" /I"$projectRoot\external\dwm_lut\lutdwm" /I"$projectRoot\external\minhook\include" hook.cpp overlay_hook.obj /Fe:oled-apl-hook.dll /link minhook.lib d3d11.lib d3dcompiler.lib dxgi.lib psapi.lib advapi32.lib user32.lib
 if errorlevel 1 exit /b 1
 cl /nologo /EHsc /std:c++17 /O2 "$projectRoot\native\hook_probe.cpp" /Fe:hook-probe.exe /link dbghelp.lib

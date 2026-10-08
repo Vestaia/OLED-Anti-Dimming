@@ -20,6 +20,12 @@ if errorlevel 1 exit /b 1
 cl /nologo /EHsc /std:c++17 /O2 /I"$projectRoot\native" "$projectRoot\tests\native\filter_test.cpp" /Fe:filter-test.exe /link d3d11.lib d3dcompiler.lib dxgi.lib
 if errorlevel 1 exit /b 1
 filter-test.exe histogram-test-config
+if errorlevel 1 exit /b 1
+cl /nologo /LD /EHsc /std:c++17 /O2 /DUNLOAD_PAYLOAD "$projectRoot\tests\native\unload_test.cpp" /Fe:unload-payload.dll
+if errorlevel 1 exit /b 1
+cl /nologo /EHsc /std:c++17 /O2 /I"$projectRoot\external\minhook\include" "$projectRoot\tests\native\unload_test.cpp" /Fe:unload-test.exe /link minhook.lib
+if errorlevel 1 exit /b 1
+unload-test.exe
 "@
 $batch | Set-Content -LiteralPath "$projectRoot/build/test-compile.cmd" -Encoding ascii
 & cmd.exe /c "$projectRoot/build/test-compile.cmd"

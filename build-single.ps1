@@ -9,7 +9,7 @@ if($LASTEXITCODE -ne 0){throw 'Camera build failed'}
 if($LASTEXITCODE -ne 0){throw 'Desktop build failed'}
 $payloadRoot=Join-Path $projectRoot 'build/package-payload'
 New-Item -ItemType Directory -Force "$payloadRoot/build","$payloadRoot/assets/benchmarks","$payloadRoot/licenses" | Out-Null
-foreach($name in @('device-info.exe','hook-probe.exe','oled-apl-hook.dll','dbghelp.dll','symsrv.dll')){
+foreach($name in @('device-info.exe','hook-probe.exe','oled-apl-hook.dll','oled-hook-bridge.dll','dbghelp.dll','symsrv.dll')){
  Copy-Item -LiteralPath "$projectRoot/build/$name" -Destination "$payloadRoot/build/$name" -Force
 }
 Copy-Item -LiteralPath "$projectRoot/build/package-native/hdr-probe.exe" -Destination "$payloadRoot/build/hdr-probe.exe" -Force

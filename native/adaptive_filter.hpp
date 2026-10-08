@@ -220,6 +220,12 @@ struct AdaptiveFilter
             require(d->CreateShaderResourceView(frame.original.Get(), nullptr, &frame.view));
             c->CopyResource(frame.original.Get(), back);
         }
+        else if (dirtyCount == 0)
+        {
+            // An empty damage list represents a full-frame present, not a
+            // request to redraw the previous pristine frame (e.g. video).
+            c->CopyResource(frame.original.Get(), back);
+        }
         else
             for (int i = 0; i < dirtyCount; i++)
             {
