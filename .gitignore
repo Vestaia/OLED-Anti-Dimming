@@ -1,0 +1,19 @@
+/build/
+__pycache__/
+session.log
+samples.csv
+**/bin/
+**/obj/
+/releases/**/*.exe
+/releases/**/*.zip
+*.user
+*.suo
+*.pdb
+*.obj
+*.log
+/.vs/
+# Generated local measurements and reports.
+/reports/
+/*-observations-*.csv
+/*-curve-*.csv
+/*-result-*.json*

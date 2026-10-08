@@ -1,0 +1,51 @@
+# Adaptive calibration and desktop filter
+
+Run `build/desktop/OledCalibration.exe` (.NET 10 Desktop Runtime). The companion native window provides the camera preview, draggable spatial ROI, and rolling brightness graph. Leave the camera stationary. The GUI selects the display and accepts a webcam name; blank prefers Brio, then the first available webcam. The backend requests manual exposure/white balance where supported and rejects unusable capture conditions.
+
+**New calibration** generates controlled primary, neutral, and mixed-color patterns, fits a whole-frame model, validates against different palettes, and refines the largest errors. **Refine high-error cases** reuses saved observations. Default acquisition adds at most four high-error source cases, three local perturbations each: window area, intensity distribution, and saturation. Only observations with a closing reference within 0.5 camera codes enter the model. Monitor-limited plateaus remain in observations but are not mistaken for successfully matched targets. Three settled fresh frames are averaged, after measured camera latency and at least 50 ms settling; frame stability is checked rather than a long fixed wait.
+
+The deployment model is a Gaussian RBF over 14 whole-frame moments: RGB means and second moments, minimum/maximum channel means and squares, mean chroma span, and occupancy above three intensity thresholds. It has an explicit black anchor, nonnegative log-gain, and no estimated RGBW drive values. Window size is no longer an input at deployment. The fixed center probe contributes to training statistics because it actually appears on screen; the filter adds no imaginary probe to desktop scenes.
+
+The CPU acquisition predictor and GPU deployment predictor use the same exported coefficients. GPU analysis samples a stratified 256×144 grid, reduces 144 groups, evaluates the model on the current frame, and applies gain in the final pixel pass. There is no CPU image readback or intentional additional frame queue. A pristine per-swap-chain cache receives newly composed damage; the corrected output is redrawn and presented in full when filtering is active. This prevents unchanged regions retaining an old gain or recursively receiving another boost. Compute bindings are restored after analysis.
+
+## Profiles and output order
+
+The implemented sequence is DWM composition -> optional ICC/PQ cube mapping -> optional VCGT device-code curves -> scene statistics -> uniform linear-light dimming correction -> DWM output conversion. The analysis and pixel pass share the same pre-correction transformation. Correction does not clamp to a monitor peak; the monitor handles its physical ceiling.
+
+Little CMS handles complete SDR RGB ICC transforms. HDR matrix ICC profiles use their linear colorants, preserving absolute PQ signal levels; SDR TRCs are deliberately excluded. HDR LUT-only ICC profiles require an explicitly prepared BT.2020/PQ `.cube`. This does not implement every HDR ICC extension, including importing MHC2 transforms. VCGT supports Little CMS table and formula curves. It is opt-in because applying a curve already loaded by Windows would double it. HDR VCGT is interpreted explicitly as a PQ device-code curve, not as a standardized HDR ICC definition. Selecting an ICC does not install or change the Windows profile association.
+
+This is the final stage of this utility's DWM filter. Windows/driver hardware calibration and monitor processing can still run afterward; a DWM hook cannot promise to be physically last in that entire chain. Calibration and deployment must use the same monitor mode and downstream processing. Adding another color profile changes the scene statistics and requires validation.
+
+## Applying the filter
+
+The GUI requests administrator privileges at launch through Windows UAC, as requested. The native camera tool can also run separately without elevation. The hook is derived from lauralex/dwm_lut's `win24h2` branch, pinned at `f5268247e8d782db5d83e872ea97d34a3dd00f10`. A separate helper resolves exact COverlayContext function names from matching Microsoft public symbols and binds their RVAs to dwmcore's PE timestamp and image size. This replaces upstream's ambiguous short Present signature. On this DisplayCore implementation, named accessors retrieve the physical D3D11 back buffer; adapter LUID and VidPn source ID select the output through QueryDisplayConfig. The adapter getter uses an output parameter, as verified in the matching binary. This replaces upstream's fixed IDXGISwapChain offset. Private ABI compatibility must still be tested for each Windows revision. No automatic startup injection is installed.
+
+Apply affects one selected monitor in the selected SDR/HDR mode. Reapply after changing display layout. DirectFlip/MPO are disabled for active filtered outputs; exclusive fullscreen bypasses the hook. The GUI reports DLL loading, not a measured latency or proof of successful display correction. Use Disable to unload. An elevated diagnostic on Windows build 26200 verified all three hook installations, submission of a complete adaptive GPU frame on the selected OLED, and successful unloading. This verifies execution, not photon latency or camera-measured desktop uniformity. `--validate-hook` fails if no complete filtered frame is observed. The initial loader rejection was caused by missing DWM read access to the staged DLL; staging now grants read/execute access without granting write access to everyone. Actual build detection uses RtlGetVersion.
+
+## Measured results, 2026-10-07
+
+The first refinement generated 12 nearby patterns from prior errors. Eleven stable new matches were accepted, bringing training to 108 matches. A validation pass without raw trials gave 1.183 camera-code RMS error. A repeat including raw trials accepted 31 of 32 cases:
+
+| Method | Camera-code RMS | Maximum absolute error |
+|---|---:|---:|
+| Raw | 7.033 | 16.041 |
+| Whole-frame adaptive model | 1.208 | 3.426 |
+| Scene feedback matching | 0.179 | 0.347 |
+
+These are relative camera observations, not luminance percentages. Validation images informed the selection of nearby training patterns, so this is targeted validation, not an independent photographic holdout. Remaining errors and extrapolation across HDR signal levels are unresolved. Training still primarily characterizes 250-signal-nit surrounds and a 100-signal-nit neutral probe; it does not yet replace the monitor's complete EOTF across every brightness and color.
+
+Native/GUI builds pass. GPU black-anchor and neutral-level predictions agree with the exported CPU model; installed ASUS SDR and HDR matrix ICC profiles and the installed XG27AQWMG VCGT convert successfully. Named DWM functions resolve on local Windows build 26200. Live DWM GPU submission and unloading now pass the elevated diagnostic. Camera-measured desktop correction and presentation latency remain unverified.
+
+Build with `./build.ps1` and `./build-desktop.ps1`. The latter requires the locally pinned dwm_lut, MinHook, and Little CMS sources under `external/`, plus Visual Studio C++ tools and .NET 10 SDK. Windows SDK debugger DLLs are copied locally when available for Microsoft symbol-server access.
+
+Implementation references: [Little CMS API](https://www.littlecms.com/LittleCMS2.18%20API.pdf), [Microsoft SymFromName](https://learn.microsoft.com/en-us/windows/win32/api/dbghelp/nf-dbghelp-symfromname), [D3D11 RWStructuredBuffer](https://learn.microsoft.com/en-us/windows/win32/direct3dhlsl/sm5-object-rwstructuredbuffer), and [Windows hardware calibration pipeline](https://learn.microsoft.com/en-us/windows/win32/wcs/display-calibration-mhc). The last source explains why downstream hardware calibration can follow a DWM filter.
+
+HDR brightness-only path: with no ICC/cube/VCGT selected, the pixel shader fetches each FP16 scRGB pixel and multiplies RGB by one scene-wide GPU gain. It bypasses all PQ and LUT operations, preserves negative channels and highlights, and leaves alpha unchanged. Optional profile LUTs use trilinear sampling; the original upstream point sampler was only suitable with upstream's explicit tetrahedral interpolation. Reusing it with SampleLevel produced a 33-step identity transform and visible banding; this is fixed. The GPU pixel-ramp regression verifies exact uniform multiplication across channels and brightness levels (zero error in the float32 test target). Windows retains responsibility for eventual output encoding/quantization.
+
+Filter transitions invalidate all desktop/window pixels and use dwm_lut's temporary desktop overlay technique to force recomposition. Refresh runs after unload, before loading a new hook to seed an uncorrected cache, and after load. Three consecutive --validate-toggles load/render/unload cycles passed. Visual accumulation still requires user verification.
+
+Calibration orchestration is now built into .NET: texture generation, 14 moments, regularized Gaussian-kernel Cholesky fit, validation-driven neighbors, CSV acquisition and heat-map drawing. No Python, NumPy, SciPy or matplotlib is used by the GUI. The native HDR/camera companion remains. New runs have separate report directories and publish the model only after successful acquisition; cancellation retains the prior selected model. Initial sampling uses 80 synthetic training states and 20 validation states (16 palette states plus four public-domain photograph/window states), followed by bounded refinement. Historical refinement migrates old photo validation to the audited public-domain benchmark bundle. See assets/benchmarks/NOTICE.md and manifest.json.
+
+Parity checks: all 96 synthetic states match the Python reference; coefficient difference below 2.3e-13. Managed benchmark generation, checksums and heat-map rendering pass offline. A GPU regression with a nonlinear VCGT and gain 2 confirms VCGT precedes gain (0.770332 versus expected 0.770331). Fresh physical camera acquisition through the managed orchestrator remains to be exercised by the user.
+
+The initial beta adds a dedicated fine neutral sweep, frame-driven delay-aware matching, and approximate native acquisition progress. Current behavior and verification are documented in [beta.md](beta.md); older measurements above predate these changes.

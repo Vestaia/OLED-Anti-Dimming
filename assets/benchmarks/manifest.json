@@ -1,0 +1,26 @@
+[
+  {
+    "name": "earth",
+    "file": "earth.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Earth_Eastern_Hemisphere.jpg",
+    "author": "NASA",
+    "license": "PD-USGov-NASA",
+    "license_url": "https://creativecommons.org/publicdomain/mark/1.0/",
+    "verified": "2026-10-07",
+    "image_url": "https://upload.wikimedia.org/wikipedia/commons/6/6f/Earth_Eastern_Hemisphere.jpg",
+    "sha256": "3b47b77b49ccd18ecf0aa58610a2047cc68a2e06a1de2e224295a1346aa2dc95",
+    "usage": "Public-domain benchmark asset; not relicensed under application terms"
+  },
+  {
+    "name": "spring",
+    "file": "spring.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Grand_prismatic_spring.jpg",
+    "author": "Jim Peaco / National Park Service",
+    "license": "PD-USGov-NPS",
+    "license_url": "https://creativecommons.org/publicdomain/mark/1.0/",
+    "verified": "2026-10-07",
+    "image_url": "https://upload.wikimedia.org/wikipedia/commons/f/f5/Grand_prismatic_spring.jpg",
+    "sha256": "5fe9a9ca6f78044aa2fb6ded649bba29f5d9554fe50b2ddb3861b3e97c4b9c51",
+    "usage": "Public-domain benchmark asset; not relicensed under application terms"
+  }
+]
