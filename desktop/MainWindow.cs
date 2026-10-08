@@ -16,23 +16,27 @@ sealed class MainWindow : Form
     readonly NumericUpDown peakBrightness = new() { Minimum = 250, Maximum = 10000, Value = 1000, Increment = 50, Width = 100 };
     readonly CheckBox express = new() { Text = "Express calibration", AutoSize = true };
     readonly TextBox log = new() { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Dock = DockStyle.Fill, BackColor = Color.FromArgb(22, 25, 31), ForeColor = Color.Gainsboro };
-    readonly Label status = new() { Text = "Filter disabled", AutoSize = true };
+    readonly Label status = new() { Text = "Checking filter status?", AutoSize = true };
     readonly ProgressBar progress = new() { Width = 500, Height = 18, Minimum = 0, Maximum = 100 };
     readonly Label progressStep = new() { Text = "Ready", AutoSize = true };
     readonly PictureBox corrections = new() { SizeMode = PictureBoxSizeMode.StretchImage };
     readonly DataGridView metrics = new() { Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false, AllowUserToDeleteRows = false, RowHeadersVisible = false, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill, BackgroundColor = Color.White };
-    readonly PictureBox chart = new() { SizeMode = PictureBoxSizeMode.StretchImage };
     readonly Button calibrate = new() { Text = "New calibration", AutoSize = true }, refine = new() { Text = "Refine high-error cases", AutoSize = true }, refineWhite = new() { Text = "Refine white / gray", AutoSize = true }, apply = new() { Text = "Apply system-wide", AutoSize = true }, disable = new() { Text = "Disable filter", AutoSize = true }, cancel = new() { Text = "Stop measurement", AutoSize = true };
-    Process? job; CancellationTokenSource? calibrationCancellation; bool busy, toggling;
+    readonly CheckBox startWithWindows = new() { Text = "Start with Windows", AutoSize = true };
+    Process? job; CancellationTokenSource? calibrationCancellation; bool busy, toggling, updatingStartup;
+    Task? calibrationTask;
+    internal bool AllowExit;
+    public event Action<string>? FilterStatusChanged;
+
     public MainWindow()
     {
+        Icon = ApplicationIcon.Monitor;
         Text = "OLED brightness calibration - Beta";
         Width = 1020;
         Height = 800;
         MinimumSize = new Size(800, 640);
         StartPosition = FormStartPosition.CenterScreen;
         Font = new Font("Segoe UI", 10);
-        Shown += (_, _) => BeginInvoke(() => { Show(); Activate(); });
         var outer = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, ColumnCount = 1, Padding = new Padding(16) };
         outer.RowStyles.Add(new(SizeType.AutoSize));
         outer.RowStyles.Add(new(SizeType.Percent, 65));
@@ -78,6 +82,7 @@ sealed class MainWindow : Form
         top.Controls.Add(Row(new Label { Text = "Refinement rounds", Width = 160 }, rounds));
         top.Controls.Add(Row(new Label { Text = "Camera", Width = 100 }, camera));
         top.Controls.Add(Row(new Label { Text = "Panel peak (nits)", Width = 160 }, peakBrightness, express));
+        top.Controls.Add(Row(startWithWindows));
         top.Controls.Add(Row(calibrate, refine, refineWhite, cancel, apply, disable, status));
         top.Controls.Add(progress);
         top.Controls.Add(progressStep);
@@ -85,31 +90,51 @@ sealed class MainWindow : Form
         var summary = new TabPage("Corrections summary");
         summary.Controls.Add(ScrollablePlot(corrections));
         tabs.TabPages.Add(summary);
-        var results = new TabPage("Validation heat map");
-        results.Controls.Add(ScrollablePlot(chart));
-        tabs.TabPages.Add(results);
-        var measured = new TabPage("Error summary");
+        var measured = new TabPage("Calibration quality");
         measured.Controls.Add(metrics);
+        measured.Controls.Add(new Label { Dock = DockStyle.Bottom, Height = 40, Text = "Relative brightness error (%), based on camera response. Not a luminance measurement." });
         tabs.TabPages.Add(measured);
-        foreach (string column in new[] { "Mode", "Samples", "RMS", "Maximum" })
+        foreach (string column in new[] { "Mode", "Samples", "RMS (average error)", "Maximum error" })
             metrics.Columns.Add(column, column);
         outer.Controls.Add(tabs, 0, 1);
         outer.Controls.Add(log, 0, 2);
-        calibrate.Click += async (_, _) => await Calibration(true);
-        refine.Click += async (_, _) => await Calibration(false);
-        refineWhite.Click += async (_, _) => await Calibration(false, true);
+        calibrate.Click += async (_, _) => await StartCalibration(true);
+        refine.Click += async (_, _) => await StartCalibration(false);
+        refineWhite.Click += async (_, _) => await StartCalibration(false, true);
         cancel.Click += (_, _) => Stop();
-        apply.Click += async (_, _) => await HookAction(async () => { if (busy) throw new InvalidOperationException("Finish calibration first"); var s = Screen.AllScreens[monitors.SelectedIndex]; await Backend.Apply(root, model.Text, hdr.Checked, s, Write); status.Text = "DWM hook loaded"; });
-        disable.Click += async (_, _) => await HookAction(() => { Backend.Disable(); status.Text = "Filter disabled"; Write("Filter bypassed; hook remains resident"); return Task.CompletedTask; });
-        FormClosing += (_, e) => { if (busy) { e.Cancel = true; Stop(); Write("Stopping measurement; close again after the camera exits."); } };
+        apply.Click += async (_, _) => await HookAction(ApplySelectedFilter);
+        disable.Click += async (_, _) => await HookAction(() => { Backend.Disable(); Write("Filter disabled; DWM detours removed"); return Task.CompletedTask; });
+        FormClosing += (_, e) => { if (e.CloseReason == CloseReason.UserClosing && !AllowExit) { e.Cancel = true; Hide(); } else if (busy) Stop(); };
+        try
+        {
+            startWithWindows.Checked = WindowsStartup.IsEnabled();
+        }
+        catch (Exception error) { Write("Startup settings: " + error.Message); }
+        startWithWindows.CheckedChanged += (_, _) =>
+        {
+            if (updatingStartup)
+                return;
+            try
+            {
+                SaveModelSelection();
+                WindowsStartup.SetEnabled(startWithWindows.Checked);
+            }
+            catch (Exception error)
+            {
+                updatingStartup = true;
+                startWithWindows.Checked = !startWithWindows.Checked;
+                updatingStartup = false;
+                Write("Startup settings: " + error.Message);
+                MessageBox.Show(this, error.Message, "Windows startup", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        };
 
         Write("Ready. Windows manages display color profiles and gamma calibration. The filter applies scene-dependent brightness correction.");
         camera.Items.Add("Automatic");
         camera.SelectedIndex = 0;
-        Shown += async (_, _) => await RefreshDevices(true);
         monitors.SelectedIndexChanged += async (_, _) => await RefreshDevices(false);
         Microsoft.Win32.SystemEvents.DisplaySettingsChanged += DisplaySettingsChanged;
-        FormClosed += (_, _) => Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= DisplaySettingsChanged;
+        FormClosed += (_, _) => { Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= DisplaySettingsChanged; corrections.Image?.Dispose(); };
         LoadReports();
         model.TextChanged += (_, _) => { if (File.Exists(model.Text)) LoadReports(); };
     }
@@ -173,7 +198,7 @@ sealed class MainWindow : Form
             if (File.Exists(metadata))
             {
                 var meta = JsonSerializer.Deserialize<CalibrationMetadata>(File.ReadAllText(metadata))!;
-                ManagedCalibration.Heatmap(folder, meta, ManagedCalibration.ReadCsv(ManagedCalibration.LatestValidation(folder)));
+                ManagedCalibration.CalibrationQualitySummary(folder, meta, ManagedCalibration.ReadCsv(ManagedCalibration.LatestValidation(folder)));
             }
             void Load(PictureBox box, string name)
             {
@@ -186,15 +211,17 @@ sealed class MainWindow : Form
                 FitPlotWidth(box);
             }
             Load(corrections, "corrections-heatmap.png");
-            Load(chart, "validation-heatmap.png");
             metrics.Rows.Clear();
             var stats = Path.Combine(folder, "validation-summary.json");
             if (File.Exists(stats))
             {
                 using var json = JsonDocument.Parse(File.ReadAllText(stats));
                 foreach (var item in new[] { ("Raw", "raw"), ("Model", "predicted_adaptive"), ("Feedback", "calibrated") })
-                    if (json.RootElement.TryGetProperty(item.Item2, out var r))
-                        metrics.Rows.Add(item.Item1, r.GetProperty("samples").GetInt32(), r.GetProperty("rms").GetDouble().ToString("0.00"), r.GetProperty("max_abs").GetDouble().ToString("0.00"));
+                    if (json.RootElement.TryGetProperty("units", out var units) && units.GetString() == "relative_camera_brightness_percent" && json.RootElement.TryGetProperty(item.Item2, out var r))
+                    {
+                        string Percent(string field) => r.GetProperty(field).ValueKind == JsonValueKind.Number ? r.GetProperty(field).GetDouble().ToString("0.00") + "%" : "?";
+                        metrics.Rows.Add(item.Item1, r.GetProperty("samples").GetInt32(), Percent("rms"), Percent("max_abs"));
+                    }
             }
         }
         catch (Exception e) { Write("Report preview: " + e.Message); }
@@ -222,7 +249,8 @@ sealed class MainWindow : Form
         }
         log.AppendText(s + Environment.NewLine);
     }
-    async Task HookAction(Func<Task> action) => await Guard(async () =>
+    Task HookAction(Func<Task> action) => Guard(() => ExecuteHookAction(action));
+    async Task ExecuteHookAction(Func<Task> action)
     {
         if (busy || toggling)
             throw new InvalidOperationException("Wait for the current operation to finish.");
@@ -232,8 +260,8 @@ sealed class MainWindow : Form
         {
             await action();
         }
-        finally { toggling = false; apply.Enabled = disable.Enabled = calibrate.Enabled = refine.Enabled = refineWhite.Enabled = true; }
-    });
+        finally { toggling = false; apply.Enabled = disable.Enabled = calibrate.Enabled = refine.Enabled = refineWhite.Enabled = true; RefreshFilterStatus(); }
+    }
     async Task Guard(Func<Task> action)
     {
         try
@@ -267,17 +295,81 @@ sealed class MainWindow : Form
         {
             await ManagedCalibration.Run(root, output, fresh, Screen.AllScreens[monitors.SelectedIndex].DeviceName, (camera.SelectedIndex > 0 ? camera.Text : ""), (int)rounds.Value, Write, p => job = p, calibrationCancellation.Token, whitesOnly, (double)peakBrightness.Value, express.Checked);
             model.Text = Path.Combine(output, "runtime-model.json");
-            File.WriteAllText(Path.Combine(dataRoot, "build", "managed-settings.json"), JsonSerializer.Serialize(new
-            {
-                model = model.Text
-            }));
+            SaveModelSelection();
             Write("Calibration complete. Model ready to apply.");
             LoadReports();
         }
         catch (OperationCanceledException) { Write("Calibration stopped; previous filter model retained."); }
-        finally { job = null; calibrationCancellation.Dispose(); calibrationCancellation = null; busy = false; calibrate.Enabled = refine.Enabled = refineWhite.Enabled = apply.Enabled = true; ManagedCalibration.Progress = null; if (progress.Value < 100) progressStep.Text = "Stopped"; status.Text = "Filter disabled"; }
+        finally { job = null; calibrationCancellation.Dispose(); calibrationCancellation = null; busy = false; calibrate.Enabled = refine.Enabled = refineWhite.Enabled = apply.Enabled = true; ManagedCalibration.Progress = null; if (progress.Value < 100) progressStep.Text = "Stopped"; RefreshFilterStatus(); }
 
     });
+    async Task StartCalibration(bool fresh, bool whitesOnly = false)
+    {
+        if (busy || toggling)
+            return;
+        calibrationTask = Calibration(fresh, whitesOnly);
+        try
+        {
+            await calibrationTask;
+        }
+        finally { calibrationTask = null; }
+    }
+    void SaveModelSelection()
+    {
+        var path = Path.Combine(dataRoot, "build", "managed-settings.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, JsonSerializer.Serialize(new
+        {
+            model = model.Text
+        }));
+    }
+    async Task ApplySelectedFilter()
+    {
+        if (monitors.SelectedIndex < 0)
+            throw new InvalidOperationException("Select a display first.");
+        await Backend.Apply(root, model.Text, hdr.Checked, Screen.AllScreens[monitors.SelectedIndex], Write);
+        SaveModelSelection();
+    }
+    public async Task InitializeAsync(bool startup)
+    {
+        await RefreshDevices(true);
+        RefreshFilterStatus();
+        if (startup && Injector.GetStatus() != FilterState.Enabled)
+        {
+            await ExecuteHookAction(ApplySelectedFilter);
+            RefreshFilterStatus();
+        }
+    }
+    public void RefreshFilterStatus()
+    {
+        if (busy || toggling || IsDisposed)
+            return;
+        try
+        {
+            status.Text = Injector.GetStatus() switch
+            {
+                FilterState.Enabled => "Filter enabled",
+                FilterState.Disabled or FilterState.NotLoaded => "Filter disabled",
+                FilterState.Faulted => "Filter stopped after an error",
+                _ => "Filter status unavailable (older hook)"
+            };
+        }
+        catch (Exception error) { status.Text = "Filter status unavailable"; Write("Filter status: " + error.Message); }
+        FilterStatusChanged?.Invoke(status.Text);
+    }
+    public async Task PrepareExitAsync(bool disableFilter)
+    {
+        if (toggling)
+            throw new InvalidOperationException("Wait for the filter operation to finish.");
+        if (busy)
+        {
+            Stop();
+            if (calibrationTask != null)
+                await calibrationTask;
+        }
+        if (disableFilter)
+            Backend.Disable();
+    }
     void Stop()
     {
         calibrationCancellation?.Cancel();

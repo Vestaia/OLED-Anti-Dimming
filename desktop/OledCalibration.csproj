@@ -3,8 +3,12 @@
     <OutputType>WinExe</OutputType><TargetFramework>net10.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
     <PlatformTarget>x64</PlatformTarget><ApplicationManifest>app.manifest</ApplicationManifest><ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
-    <Version>0.1.0-beta</Version><Product>OLED APL Calibration</Product>
+    <Version>0.2.0</Version><Product>OLED APL Calibration</Product>
+    <ApplicationIcon>../assets/icons/monitor.ico</ApplicationIcon>
   </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="../assets/icons/monitor.ico" LogicalName="OledCalibration.MonitorIcon" />
+  </ItemGroup>
   <ItemGroup Condition="'$(StandalonePackage)' == 'true'">
     <EmbeddedResource Include="../build/standalone-payload.zip" LogicalName="OledCalibration.Payload" />
   </ItemGroup>

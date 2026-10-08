@@ -360,7 +360,7 @@ static partial class ManagedCalibration
         Step(97, "Saving");
         File.WriteAllText(Path.Combine(output, "metadata.json"), JsonSerializer.Serialize(meta, new JsonSerializerOptions { WriteIndented = true }));
         SaveCsv(Path.Combine(output, "combined-training.csv"), rows);
-        Heatmap(output, meta, validation);
+        CalibrationQualitySummary(output, meta, validation);
         string pending = Path.Combine(output, "runtime-model-pending.json");
         File.WriteAllText(pending, fit.Json(monitor));
         File.Move(pending, Path.Combine(output, "runtime-model.json"), true);

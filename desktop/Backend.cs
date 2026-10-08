@@ -277,6 +277,54 @@ static class Injector
     [DllImport("kernel32.dll")] static extern bool VirtualFreeEx(IntPtr process, IntPtr address, nuint size, uint type);
     static Exception Error(string operation) => new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), operation);
     static Process[] Targets() => Process.GetProcessesByName("dwm").Where(p => p.SessionId == Process.GetCurrentProcess().SessionId).ToArray();
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool ReadProcessMemory(IntPtr process, IntPtr address, byte[] buffer, nuint size, out nuint read);
+    public static FilterState GetStatus()
+    {
+        var state = FilterState.NotLoaded;
+        AsSystem(() =>
+        {
+            foreach (var process in Targets())
+                using (process)
+                    foreach (ProcessModule module in process.Modules)
+                    {
+                        if (!module.ModuleName.Equals(Name, StringComparison.OrdinalIgnoreCase))
+                            continue;
+                        var local = LoadLibraryEx(module.FileName, IntPtr.Zero, 1);
+                        if (local == IntPtr.Zero)
+                            throw Error("Read filter state export");
+                        try
+                        {
+                            var export = GetProcAddress(local, "OledFilterState");
+                            if (export == IntPtr.Zero)
+                            {
+                                state = FilterState.Unknown;
+                                return;
+                            }
+                            var handle = OpenProcess(0x0010 | 0x1000, false, (uint)process.Id);
+                            if (handle == IntPtr.Zero)
+                                throw Error("Read DWM filter status");
+                            try
+                            {
+                                var bytes = new byte[4];
+                                var address = new IntPtr(module.BaseAddress.ToInt64() + export.ToInt64() - local.ToInt64());
+                                if (!ReadProcessMemory(handle, address, bytes, 4, out var read) || read != 4)
+                                    throw Error("Read DWM filter state");
+                                state = BitConverter.ToInt32(bytes) switch
+                                {
+                                    0 => FilterState.Disabled,
+                                    1 => FilterState.Enabled,
+                                    2 => FilterState.Faulted,
+                                    _ => FilterState.Unknown
+                                };
+                            }
+                            finally { CloseHandle(handle); }
+                        }
+                        finally { FreeLibrary(local); }
+                        return;
+                    }
+        });
+        return state;
+    }
     public static bool IsLoaded()
     {
         try

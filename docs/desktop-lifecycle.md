@@ -1,0 +1,37 @@
+# Desktop lifecycle and calibration quality
+
+The results UI contains Corrections summary and Calibration quality. Validation
+measurements remain part of fitting/refinement, but the validation heatmap is no
+longer generated or displayed. RMS and maximum errors are calculated from
+`100 * (camera_response - reference_response) / reference_response`, after rejecting
+drifted references. These percentages describe relative camera brightness, not
+absolute luminance or a linear camera-to-light conversion. Empty measurements
+display a dash rather than zero error. Existing reports are recalculated from
+their validation CSV when opened.
+
+Closing the window hides it in the tray and leaves active calibration running.
+Double-clicking the icon or choosing Open restores it. Launching a second copy
+signals the existing instance instead of creating a second controller.
+
+- Exit stops any calibration gracefully and leaves the current filter active.
+- Disable filter and exit also removes the DWM detours before closing. Failure
+  leaves the application running and reports the error in a tray notification.
+
+Start with Windows registers a per-user Task Scheduler logon task with the user's
+interactive token and highest available privileges. It stores no password, waits
+10 seconds after sign-in, launches the selected executable with `--startup`, and
+has no runtime time limit or battery restriction. Unchecking removes the task.
+Keep that executable at its registered location. Startup loads the saved model
+and detected HDR state, applies the filter, and remains in the tray; failures
+produce a tray notification without opening the main window.
+
+The native hook exports an atomic status word. The GUI reads it from the current
+session's DWM process without executing a remote query or changing the hook,
+refreshing on open, after filter operations, and periodically. A resident DLL
+with disabled detours reports Disabled. Older hooks without the status export
+report Unavailable, rather than guessing from stale marker files. Updating a
+resident hook still requires signing out first.
+
+Offline checks cover percentage/RMS calculations, empty summaries, the two-tab
+layout, and hide-versus-exit behavior. Live sign-in and filter interaction require
+testing with the new executable; tests do not enable startup or inject into DWM.

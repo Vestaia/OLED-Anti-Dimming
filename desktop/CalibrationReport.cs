@@ -5,25 +5,6 @@ namespace OledCalibration;
 
 static partial class ManagedCalibration
 {
-    static string CompactLabel(string name, int index)
-    {
-        foreach (var (prefix, label) in new[] { ("gamut-solid-", "S"), ("gamut-cluster-", "C") })
-            if (name.StartsWith(prefix))
-                return label + name[prefix.Length..].Split('_')[0];
-        if (name.StartsWith("gamut-probe-"))
-            return "P" + (index + 1);
-        if (name.StartsWith("neutral-fine-nits-"))
-            return name[18..] + "n";
-        if (name.StartsWith("neutral-fine-"))
-            return $"Gray {double.Parse(name[13..], Inv) * 100:g}%";
-        if (name.StartsWith("holdout"))
-            return "H" + name[7..];
-        if (name.StartsWith("adapt_"))
-            return "A" + (index + 1);
-        if (name.StartsWith("checker"))
-            return name.Replace("checker", "Mix ").Replace("_v", ".");
-        return name.Replace("photo-", "");
-    }
     public static void CorrectionHeatmap(string output, CalibrationModel model)
     {
         double[] areas = [.02, .06, .10, .15, .18, .22, .26, .30, .34, .38, .42, .50, .60, .70, .80, .90, 1];
@@ -60,60 +41,31 @@ static partial class ManagedCalibration
         }
         bitmap.Save(Path.Combine(output, "corrections-heatmap.png"), System.Drawing.Imaging.ImageFormat.Png);
     }
-    public static void Heatmap(string output, CalibrationMetadata meta, List<Dictionary<string, string>> rows)
+    public static void CalibrationQualitySummary(string output, CalibrationMetadata meta, List<Dictionary<string, string>> rows)
     {
-        var lookup = meta.scenes.ToDictionary(r => r.name);
-        var names = rows.Select(r => r["name"]).Distinct().Where(lookup.ContainsKey).ToArray();
-        var scenes = names.Select(n => lookup[n].scene).Distinct().ToArray();
-        var areas = names.Select(n => lookup[n].area).Distinct().Order().ToArray();
+        var lookup = meta.scenes.ToDictionary(scene => scene.name);
         var closing = Closing(rows);
-        string[] roles = ["raw", "predicted_adaptive", "calibrated"], titles = ["Raw", "Adaptive model", "Feedback match"];
-        var data = new Dictionary<(int, int, int), double>();
-        foreach (var r in rows)
+        var summary = new Dictionary<string, object>
         {
-            int role = Array.IndexOf(roles, r["role"]);
-            if (role < 0 || !lookup.TryGetValue(r["name"], out var scene) || ClosingError(closing, scene) > .5)
-                continue;
-            data[(role, Array.IndexOf(scenes, scene.scene), Array.IndexOf(areas, scene.area))] = Value(r, "camera_code") - Value(r, "reference_code");
-        }
-        double limit = Math.Max(1, data.Count == 0 ? 1 : data.Values.Max(Math.Abs));
-        int panel = 380, cell = 260 / Math.Max(1, areas.Length), height = Math.Max(350, 100 + scenes.Length * 38);
-        using var bitmap = new Bitmap(panel * 3, height);
-        using var g = Graphics.FromImage(bitmap);
-        g.Clear(Color.White);
-        using var font = new Font("Segoe UI", 10);
-        g.DrawString("Relative camera-code error (not luminance %) - missing or drift-rejected: x", font, Brushes.Black, 10, 10);
-        var summary = new Dictionary<string, object>();
-        for (int k = 0; k < 3; k++)
+            ["units"] = "relative_camera_brightness_percent"
+        };
+        foreach (string role in new[] { "raw", "predicted_adaptive", "calibrated" })
         {
-            int origin = k * panel;
-            g.DrawString(titles[k], font, Brushes.Black, origin + 140, 38);
-            for (int a = 0; a < areas.Length; a++)
-                g.DrawString($"{areas[a] * 100:g}%", font, Brushes.Black, origin + 125 + a * cell, 65);
-            for (int s = 0; s < scenes.Length; s++)
-            {
-                int y = 90 + s * 38;
-                g.DrawString(CompactLabel(scenes[s], s), font, Brushes.Black, origin + 3, y + 6);
-                for (int a = 0; a < areas.Length; a++)
-                {
-                    int x = origin + 120 + a * cell;
-                    bool found = data.TryGetValue((k, s, a), out double v);
-                    double f = Math.Min(1, Math.Abs(v) / limit);
-                    var color = !found ? Color.LightGray : v >= 0 ? Color.FromArgb(255, (int)(255 * (1 - f)), (int)(255 * (1 - f))) : Color.FromArgb((int)(255 * (1 - f)), (int)(255 * (1 - f)), 255);
-                    using var brush = new SolidBrush(color);
-                    g.FillRectangle(brush, x, y, cell - 4, 34);
-                    g.DrawString(found ? v.ToString("+0.00;-0.00;0.00", Inv) : "x", font, Brushes.Black, x + 12, y + 6);
-                }
-            }
-            var values = data.Where(p => p.Key.Item1 == k).Select(p => p.Value).ToArray();
-            summary[roles[k]] = new
-            {
-                samples = values.Length,
-                rms = values.Length == 0 ? 0 : Math.Sqrt(values.Average(v => v * v)),
-                max_abs = values.Length == 0 ? 0 : values.Max(Math.Abs)
-            };
+            var errors = rows.Where(row => row["role"] == role && lookup.ContainsKey(row["name"]))
+                .GroupBy(row => row["name"]).Select(group => group.Last())
+                .Where(row => ClosingError(closing, lookup[row["name"]]) <= .5)
+                .Select(row => RelativeBrightnessError(Value(row, "camera_code"), Value(row, "reference_code")))
+                .Where(double.IsFinite).ToArray();
+            summary[role] = QualityMetrics(errors);
         }
-        bitmap.Save(Path.Combine(output, "validation-heatmap.png"), System.Drawing.Imaging.ImageFormat.Png);
         File.WriteAllText(Path.Combine(output, "validation-summary.json"), JsonSerializer.Serialize(summary, new JsonSerializerOptions { WriteIndented = true }));
     }
+    internal static double RelativeBrightnessError(double measured, double reference) =>
+        reference > 0 && double.IsFinite(reference) && double.IsFinite(measured) ? 100 * (measured - reference) / reference : double.NaN;
+    internal static object QualityMetrics(double[] errors) => new
+    {
+        samples = errors.Length,
+        rms = errors.Length == 0 ? (double?)null : Math.Sqrt(errors.Average(v => v * v)),
+        max_abs = errors.Length == 0 ? (double?)null : errors.Max(Math.Abs)
+    };
 }

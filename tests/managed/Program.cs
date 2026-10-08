@@ -10,6 +10,7 @@ static class TestProgram
         {
             ApplicationConfiguration.Initialize();
             ManagedCalibration.VerifyCalibration(Backend.Root);
+            QualityAndTrayChecks.Run();
             Console.WriteLine("PASS: gamut sampling, histogram PCA, model and report regressions");
             return 0;
         }

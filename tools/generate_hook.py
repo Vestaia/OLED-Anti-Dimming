@@ -188,7 +188,7 @@ long long COverlayContext_Present_hook_24h2(void* self,void* overlay,unsigned in
 ''' +source[end:]
 # Toggle callbacks without unmapping executing code. All mutable hook state is
 # serialized; graphics/model reload happens only on the compositor render thread.
-source=source.replace('#include "adaptive_filter.hpp"','#include "adaptive_filter.hpp"\n#include "dwm_context_state.hpp"\n#include <mutex>\nstd::recursive_mutex filterMutex;\nbool filterEnabled=true;\nbool filterReload=false;\nDwmContextState dwmState;\nextern "C" __declspec(dllexport) DWORD WINAPI OledFilterControl(void* command) {bool enable=command!=nullptr;{std::lock_guard<std::recursive_mutex> lock(filterMutex);filterEnabled=enable;filterReload=enable;}auto status=enable?MH_EnableHook(MH_ALL_HOOKS):MH_DisableHook(MH_ALL_HOOKS);return status==MH_OK||status==(enable?MH_ERROR_ENABLED:MH_ERROR_DISABLED)?1:0;}')
+source=source.replace('#include "adaptive_filter.hpp"','#include "adaptive_filter.hpp"\n#include "dwm_context_state.hpp"\n#include <mutex>\nstd::recursive_mutex filterMutex;\nbool filterEnabled=true;\nextern "C" __declspec(dllexport) volatile LONG OledFilterState=1;\nbool filterReload=false;\nDwmContextState dwmState;\nextern "C" __declspec(dllexport) DWORD WINAPI OledFilterControl(void* command) {bool enable=command!=nullptr;{std::lock_guard<std::recursive_mutex> lock(filterMutex);filterEnabled=enable;filterReload=enable;}auto status=enable?MH_EnableHook(MH_ALL_HOOKS):MH_DisableHook(MH_ALL_HOOKS);bool ok=status==MH_OK||status==(enable?MH_ERROR_ENABLED:MH_ERROR_DISABLED);InterlockedExchange(&OledFilterState,ok?(enable?1:0):2);return ok?1:0;}')
 source=source.replace('if (IsLUTActive(self))','if (filterEnabled && IsLUTActive(self))')
 for signature in ['bool COverlayContext_IsCandidateDirectFlipCompatbile_hook_24h2(', 'bool COverlayContext_OverlaysEnabled_hook(']:
     start=source.index(signature);brace=source.index('{',start);source=source[:brace+1]+'\n    std::lock_guard<std::recursive_mutex> lock(filterMutex);'+source[brace+1:]
@@ -212,7 +212,7 @@ source=source.replace('            hookLog("All three hooks installed");','''   
             if(!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_PIN,(LPCWSTR)&OledFilterControl,&pinned)){hookLog("Cannot pin filter callbacks");return FALSE;}
             hookLog("All three hooks installed; resident toggle API enabled");''')
 source=source.replace('                if(!hookStatus(MH_EnableHook(MH_ALL_HOOKS),"Enable")){MH_Uninitialize();return FALSE;}\n','')
-source=source.replace('            hookLog("All three hooks installed; resident toggle API enabled");','            if(!hookStatus(MH_EnableHook(MH_ALL_HOOKS),"Enable")){filterEnabled=false;return FALSE;}\n            hookLog("All three hooks installed; resident toggle API enabled");')
+source=source.replace('            hookLog("All three hooks installed; resident toggle API enabled");','            if(!hookStatus(MH_EnableHook(MH_ALL_HOOKS),"Enable")){filterEnabled=false;InterlockedExchange(&OledFilterState,2);return FALSE;}\n            hookLog("All three hooks installed; resident toggle API enabled");')
 source=source.replace('typedef long long (COverlayContext_Present_24h2_t)', 'typedef long (COverlayContext_Present_24h2_t)')
 source=source.replace('long long COverlayContext_Present_hook_24h2(', 'long COverlayContext_Present_hook_24h2(')
 # The private OverlaysEnabled leaf has interprocedural register-preservation
@@ -222,7 +222,7 @@ source=source.replace('BOOL APIENTRY DllMain(', 'extern "C" bool OledOverlaysEna
 source=source.replace('(PVOID)COverlayContext_OverlaysEnabled_hook,', '(PVOID)OledOverlaysEnabledThunk,')
 # Abort rendering on a graphics initialization failure, leaving no repeated
 # per-frame exception churn. GUI activation verifies a successful filtered frame.
-source=source.replace('        hookLog(ex.what());','        hookLog(ex.what()); filterEnabled=false;')
+source=source.replace('        hookLog(ex.what());','        hookLog(ex.what()); filterEnabled=false; InterlockedExchange(&OledFilterState,2);')
 # Never perform MinHook/COM teardown under loader lock at process termination.
 start=source.index('\tcase DLL_PROCESS_DETACH:');end=source.index('\tdefault:',start)
 source=source[:start]+'\tcase DLL_PROCESS_DETACH:\n\t\tbreak;\n'+source[end:]

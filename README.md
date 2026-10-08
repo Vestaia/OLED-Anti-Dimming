@@ -12,6 +12,7 @@ A Windows utility that reduces content-dependent OLED dimming through webcam cal
 2. Place the camera close to the center of the screen. The center reference patch should fill the camera's view.
 3. Select your camera and display, enter the panel peak brightness (default 1,000 nits), then click **New calibration**.
 4. Review the results, then click **Apply system wide**.
+5. Optionally enable **Start with Windows** to apply the filter at sign-in and stay in the system tray.
 
 Calibration data is stored in `%LOCALAPPDATA%\OledCalibration\data`.
 
@@ -23,6 +24,7 @@ Calibration data is stored in `%LOCALAPPDATA%\OledCalibration\data`.
 - **Automatic webcam calibration** after camera setup; no colorimeter required.
 - **Adaptive sampling and refinement** focused on dimming regions and validation errors.
 - **Single executable**, with no Python runtime dependency.
+- **System tray and startup support:** closing the window keeps the app in the tray.
 
 ## Planned features
 
