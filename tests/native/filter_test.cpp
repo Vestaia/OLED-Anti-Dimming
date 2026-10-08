@@ -119,6 +119,7 @@ int main(int argc, char **argv)
                     }
                 }
                 double logGain = -filter.config.baseline;
+                double normalization = 0;
                 for (unsigned n = 0; n < filter.config.count; n++)
                 {
                     double distance = 0;
@@ -127,17 +128,28 @@ int main(int argc, char **argv)
                         double delta = features[j] / filter.config.scale[j] - model[n * 16 + j];
                         distance += delta * delta;
                     }
-                    logGain += model[n * 16 + 14] * exp(-.09 * distance);
+                    double weight = filter.config.localNeighbors ? 1 / pow(distance + .0001, 3) : exp(-.09 * distance);
+                    logGain += model[n * 16 + 14] * weight;
+                    normalization += weight;
                 }
+                if (filter.config.localNeighbors) logGain /= normalization;
                 double cpu = exp((std::max)(logGain, 0.));
                 if (std::abs(gpu - cpu) > 2e-4)
                     throw std::runtime_error("GPU/CPU moment-model disagreement");
                 std::cout << "Neutral level " << value << ": GPU gain " << gpu << ", CPU " << cpu
                           << "\n";
             };
-            evaluate(.04);
-            evaluate(.4);
-            evaluate(1);
+            for (UINT cells : {10000u, 25000u, 60000u, 17321u})
+            {
+                filter.samplingCells = cells;
+                evaluate(.04);
+                evaluate(.4);
+                evaluate(1);
+                if (filter.config.gridWidth > d.Width || filter.config.gridHeight > d.Height ||
+                    filter.partialGroups != filter.config.groupsX * filter.config.groupsY)
+                    throw std::runtime_error("Sampling grid bounds or allocation mismatch");
+            }
+            filter.samplingCells = 25000;
         }
 
         // Regression: restore bindings our original hook omitted (PS b1 / t2-t5,
@@ -346,7 +358,7 @@ int main(int argc, char **argv)
             for (int i = 0; i < 1000; i++)
             {
                 ctx->CSSetShader(filter.features.Get(), nullptr, 0);
-                ctx->Dispatch(filter.config.pad ? 8 : 16, filter.config.pad ? 4 : 9, 1);
+                ctx->Dispatch(filter.config.groupsX, filter.config.groupsY, 1);
                 ctx->CSSetShader(filter.infer.Get(), nullptr, 0);
                 ctx->Dispatch(1, 1, 1);
             }

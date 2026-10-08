@@ -19,22 +19,26 @@ original schedule.
   white levels and primary/secondary colors, bounded by the selected peak. Covariance power iteration uses no
   third-party numerical dependencies. Components are measured relative to the
   black histogram so the existing unity black anchor remains valid.
-- Existing nonlinear regularized Gaussian correction fitter operates on these
+- Normalized inverse-distance interpolation blends measured log gains in these
   coordinates. This does not assume additive subpixel power.
 
-The CPU builds distributions from the same 128 ? 64 grid as the GPU, respecting
-window boundaries, point-sampled pattern textures, black outside the window,
-gray backgrounds and the centered 100-nit probe. It does not subtract an average
-color from a spatially nonuniform pattern. These are nominal, uncorrected input
-scene distributions, matching runtime analysis before the uniform gain.
+Calibration counts the exact displayed coverage of every generated pattern texel,
+including black outside the window, gray backgrounds, and the centered reference
+probe. Separable raster coverage avoids scanning the whole display for each scene.
+Every mosaic probe pixel is counted once and its distribution is cached by size.
+These are nominal, uncorrected input distributions before the uniform gain.
+Calibration inputs are not subsampled; runtime screen analysis remains subsampled.
+Older runtime models can still be applied, but a new calibration is required before
+refinement so old PCA coordinates are not mixed with exact pattern statistics.
 
 ## Runtime
 
-8,192 sampled pixels; group-local integer histograms; no global histogram atomics
+Configurable, aspect-aware pixel sampling (default ~25,000 cells); group-local integer histograms; no global histogram atomics
 and no CPU readback. Two compute dispatches accumulate/project the histogram and
-evaluate the correction. Inference distributes RBF centers over 128 threads.
+evaluate the correction. Inference distributes measured centers over 128 threads.
 The FP16 scRGB pixel pass still multiplies all channels by one uniform gain.
-Runtime binary APL2 embeds the PCA basis; older moment binaries are rejected.
+Runtime binary APL3 embeds the PCA basis and measured log gains. APL2 remains
+supported for legacy Gaussian models; older moment binaries are rejected.
 PCA JSON carries the basis, so subsequent versions do not silently change it.
 
 ## Initial checks and limitations

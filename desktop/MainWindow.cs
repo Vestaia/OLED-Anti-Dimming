@@ -23,6 +23,9 @@ sealed class MainWindow : Form
     readonly DataGridView metrics = new() { Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false, AllowUserToDeleteRows = false, RowHeadersVisible = false, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill, BackgroundColor = Color.White };
     readonly Button calibrate = new() { Text = "New calibration", AutoSize = true }, refine = new() { Text = "Refine high-error cases", AutoSize = true }, refineWhite = new() { Text = "Refine white / gray", AutoSize = true }, apply = new() { Text = "Apply system-wide", AutoSize = true }, disable = new() { Text = "Disable filter", AutoSize = true }, cancel = new() { Text = "Stop measurement", AutoSize = true };
     readonly CheckBox startWithWindows = new() { Text = "Start with Windows", AutoSize = true };
+    readonly ComboBox samplingQuality = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 130 };
+    readonly NumericUpDown samplingCells = new() { Minimum = 256, Maximum = 1000000, Value = 25000, ThousandsSeparator = true, Width = 110 };
+    readonly Label samplingGrid = new() { AutoSize = true };
     Process? job; CancellationTokenSource? calibrationCancellation; bool busy, toggling, updatingStartup;
     Task? calibrationTask;
     internal bool AllowExit;
@@ -51,12 +54,19 @@ sealed class MainWindow : Form
             monitors.Items.Add(screen.DeviceName + "  " + screen.Bounds.Width + " x " + screen.Bounds.Height);
         monitors.SelectedIndex = Math.Min(1, monitors.Items.Count - 1);
         model.Text = Path.Combine(dataRoot, "reports", "adaptive", "runtime-model.json");
+        samplingQuality.Items.AddRange(["Quality", "Balanced", "Performance", "Custom"]);
+        samplingQuality.SelectedIndex = 1;
         var managedSettings = Path.Combine(dataRoot, "build", "managed-settings.json");
         if (File.Exists(managedSettings))
         {
             try
             {
                 var path = JsonDocument.Parse(File.ReadAllText(managedSettings)).RootElement.GetProperty("model").GetString();
+                var settings = JsonDocument.Parse(File.ReadAllText(managedSettings)).RootElement;
+                if (settings.TryGetProperty("sampling_mode", out var mode) && mode.GetInt32() is >= 0 and <= 3)
+                    samplingQuality.SelectedIndex = mode.GetInt32();
+                if (settings.TryGetProperty("sampling_cells", out var cells))
+                    samplingCells.Value = Math.Clamp(cells.GetInt32(), 256, 1000000);
                 if (File.Exists(path))
                     model.Text = path!;
             }
@@ -83,6 +93,28 @@ sealed class MainWindow : Form
         top.Controls.Add(Row(new Label { Text = "Camera", Width = 100 }, camera));
         top.Controls.Add(Row(new Label { Text = "Panel peak (nits)", Width = 160 }, peakBrightness, express));
         top.Controls.Add(Row(startWithWindows));
+        top.Controls.Add(Row(new Label { Text = "Sampling", Width = 100 }, samplingQuality, samplingCells, samplingGrid));
+        void UpdateSampling()
+        {
+            samplingCells.Enabled = samplingQuality.SelectedIndex == 3;
+            if (!samplingCells.Enabled)
+                samplingCells.Value = samplingQuality.SelectedIndex switch
+                {
+                    0 => 60000,
+                    2 => 10000,
+                    _ => 25000
+                };
+            if (monitors.SelectedIndex < 0)
+                return;
+            var bounds = Screen.AllScreens[monitors.SelectedIndex].Bounds;
+            int x = Math.Min(bounds.Width, Math.Max(1, (int)Math.Round(Math.Sqrt((double)samplingCells.Value * bounds.Width / bounds.Height))));
+            int y = Math.Min(bounds.Height, Math.Max(1, (int)Math.Round((double)samplingCells.Value / x)));
+            samplingGrid.Text = $"{x} × {y} ({x * y:N0} cells)";
+        }
+        samplingQuality.SelectedIndexChanged += (_, _) => UpdateSampling();
+        samplingCells.ValueChanged += (_, _) => UpdateSampling();
+        monitors.SelectedIndexChanged += (_, _) => UpdateSampling();
+        UpdateSampling();
         top.Controls.Add(Row(calibrate, refine, refineWhite, cancel, apply, disable, status));
         top.Controls.Add(progress);
         top.Controls.Add(progressStep);
@@ -320,14 +352,16 @@ sealed class MainWindow : Form
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, JsonSerializer.Serialize(new
         {
-            model = model.Text
+            model = model.Text,
+            sampling_mode = samplingQuality.SelectedIndex,
+            sampling_cells = (int)samplingCells.Value
         }));
     }
     async Task ApplySelectedFilter()
     {
         if (monitors.SelectedIndex < 0)
             throw new InvalidOperationException("Select a display first.");
-        await Backend.Apply(root, model.Text, hdr.Checked, Screen.AllScreens[monitors.SelectedIndex], Write);
+        await Backend.Apply(root, model.Text, hdr.Checked, Screen.AllScreens[monitors.SelectedIndex], Write, (int)samplingCells.Value);
         SaveModelSelection();
     }
     public async Task InitializeAsync(bool startup)

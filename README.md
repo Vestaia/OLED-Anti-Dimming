@@ -44,7 +44,7 @@ Launch `build/single/OledCalibration.exe`. Current hook support targets Windows 
 ## Design
 
 - **DWM hooks:** intercept composed frames using a hook derived from [dwm_lut](https://github.com/ledoge/dwm_lut), preserving graphics state and an uncorrected frame cache.
-- **Display subsampling:** analyze a 128 ? 64 grid spanning the display buffer.
+- **Display subsampling:** analyze an aspect-aware grid: Quality ~60,000 cells, Balanced ~25,000, Performance ~10,000, or Custom.
 - **3D color histogram:** map linear BT.2020 samples into a soft 8 ? 8 ? 8 RGB histogram, retaining mixed-color distributions.
 - **PCA generation:** learn 14 components from representative and synthetic histograms, then freeze the basis during calibration.
 - **Adaptive gamut sampling:** begin with vertices, edge and face centers, grayscale points, spaced interior colors, and clustered mixtures; refine poorly covered or inaccurate regions.

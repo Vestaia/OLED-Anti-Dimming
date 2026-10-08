@@ -12,6 +12,8 @@ cbuffer FilterParams : register(b1) {
  uint count,hasVcgt,enabled,unused;
  float peak,baseline,epsilon,whiteNits;
  float4 scale[4];
+ uint gridWidth,gridHeight,groupsX,groupsY;
+ uint localNeighbors,pad0,pad1,pad2;
 };
 RWStructuredBuffer<float4> Partial : register(u0);
 RWStructuredBuffer<float4> Result : register(u1);
@@ -31,13 +33,14 @@ float3 managed(float3 raw){
  return hdrInput!=0?unpq(code):mul(to2020,unsrgb(code))*whiteNits;
 }
 groupshared float4 sums[256*4];
-// Soft RGB histogram: 8,192 stratified samples, 32 private group histograms.
+// Aspect-aware sampling grid with private group histograms.
 // Integer atomics are confined to shared memory, never a global hot bin.
 groupshared uint histogram[512];
 groupshared float4 encoded[4];
 [numthreads(16,16,1)] void HistogramFeatures(uint3 id:SV_DispatchThreadID,uint3 group:SV_GroupID,uint lane:SV_GroupIndex) {
  histogram[lane]=0;histogram[lane+256]=0;GroupMemoryBarrierWithGroupSync();
- float3 c=managed(Scene.Load(int3(min(uint2((id.xy+.5)*float2(width,height)/float2(128,64)),uint2(width-1,height-1)),0)).rgb)/250.;
+ if(id.x<gridWidth && id.y<gridHeight) {
+ float3 c=managed(Scene.Load(int3(min(uint2((id.xy+.5)*float2(width,height)/float2(gridWidth,gridHeight)),uint2(width-1,height-1)),0)).rgb)/250.;
  float3 x=clamp(sqrt(max(c,0)/40.)*7.,0,7);
  uint3 lo=min(uint3(x),6);float3 t=x-lo;
  [unroll] for(uint k=0;k<8;k++) {
@@ -45,16 +48,17 @@ groupshared float4 encoded[4];
   float3 w=lerp(1-t,t,float3(d));uint3 b=lo+d;
   InterlockedAdd(histogram[b.x*64+b.y*8+b.z],uint(round(w.x*w.y*w.z*4096.)));
  }
+ }
  GroupMemoryBarrierWithGroupSync();
  for(uint k=lane;k<128;k+=256) {
   uint b=k*4;
-  Partial[(group.y*8+group.x)*128+k]=float4(histogram[b],histogram[b+1],histogram[b+2],histogram[b+3])/(8192.*4096.);
+  Partial[(group.y*groupsX+group.x)*128+k]=float4(histogram[b],histogram[b+1],histogram[b+2],histogram[b+3])/(float(gridWidth)*gridHeight*4096.);
  }
 }
 [numthreads(128,1,1)] void HistogramInfer(uint lane:SV_GroupIndex) {
  float4 projected[4];for(uint j=0;j<4;j++)projected[j]=0;
  for(uint b=lane;b<512;b+=128) {
-  float mass=0;for(uint g=0;g<32;g++)mass+=Partial[g*128+b/4][b%4];
+  float mass=0;for(uint g=0;g<groupsX*groupsY;g++)mass+=Partial[g*128+b/4][b%4];
   mass-=b==0?1.:0.;
   for(uint j=0;j<4;j++)projected[j]+=mass*Basis[b*4+j];
  }
@@ -63,11 +67,11 @@ groupshared float4 encoded[4];
  for(uint step=64;step>0;step/=2){if(lane<step)for(uint j=0;j<4;j++)sums[lane*4+j]+=sums[(lane+step)*4+j];GroupMemoryBarrierWithGroupSync();}
  if(lane==0)for(uint j=0;j<4;j++)encoded[j]=sums[j];
  GroupMemoryBarrierWithGroupSync();
- float contribution=0;
- for(uint n=lane;n<count;n+=128){float distance=0;[unroll]for(uint j=0;j<14;j++){float d=encoded[j/4][j%4]/scale[j/4][j%4]-Model[n*4+j/4][j%4];distance+=d*d;}contribution+=Model[n*4+3].z*exp(-epsilon*epsilon*distance);}
- sums[lane*4]=float4(contribution,0,0,0);GroupMemoryBarrierWithGroupSync();
+ float contribution=0,normalization=0;
+ for(uint n=lane;n<count;n+=128){float distance=0;[unroll]for(uint j=0;j<14;j++){float d=encoded[j/4][j%4]/scale[j/4][j%4]-Model[n*4+j/4][j%4];distance+=d*d;}float soft=distance+.0001;float weight=localNeighbors!=0?1/(soft*soft*soft):exp(-epsilon*epsilon*distance);contribution+=Model[n*4+3].z*weight;normalization+=weight;}
+ sums[lane*4]=float4(contribution,normalization,0,0);GroupMemoryBarrierWithGroupSync();
  for(uint step=64;step>0;step/=2){if(lane<step)sums[lane*4]+=sums[(lane+step)*4];GroupMemoryBarrierWithGroupSync();}
- if(lane==0)Result[0]=float4(enabled!=0&&count>0?exp(max(sums[0].x-baseline,0)):1,0,0,0);
+ if(lane==0)Result[0]=float4(enabled!=0&&count>0?exp(max(localNeighbors!=0?sums[0].x/max(sums[0].y,1e-30):sums[0].x-baseline,0)):1,0,0,0);
 
 }
 struct VOut{float4 pos:SV_POSITION;float2 tex:TEXCOORD;};

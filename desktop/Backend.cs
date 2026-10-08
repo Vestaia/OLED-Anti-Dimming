@@ -82,7 +82,7 @@ static class Backend
         _ = CalibrationModel.Load(json);
         using var document = JsonDocument.Parse(File.ReadAllText(json));
         var model = document.RootElement;
-        if (model.GetProperty("version").GetInt32() is not (1 or 2) || model.GetProperty("features").GetInt32() != 14)
+        if (model.GetProperty("version").GetInt32() is not (1 or 2 or 3) || model.GetProperty("features").GetInt32() != 14)
             throw new Exception("Unsupported model version or features");
         var centers = model.GetProperty("centers").EnumerateArray().ToArray();
         var coefficients = model.GetProperty("coefficients").EnumerateArray().ToArray();
@@ -94,7 +94,7 @@ static class Backend
             throw new InvalidDataException("Create a new PCA calibration. This model has no histogram encoder.");
         if (model.GetProperty("version").GetInt32() == 2 && !histogram)
             throw new Exception("PCA model is missing its encoder");
-        f.Write(histogram ? 0x324c5041u : 0x314c5041u);
+        f.Write(model.GetProperty("version").GetInt32() == 3 ? 0x334c5041u : 0x324c5041u);
         f.Write((uint)centers.Length);
         foreach (var k in new[] { "peak", "baseline", "epsilon" })
             f.Write(model.GetProperty(k).GetSingle());
@@ -120,7 +120,7 @@ static class Backend
                     f.Write(component < 14 ? basis[component][bin] : 0f);
         }
     }
-    public static async Task Apply(string root, string model, bool hdr, Screen screen, Action<string> log)
+    public static async Task Apply(string root, string model, bool hdr, Screen screen, Action<string> log, int samplingCells = 25000)
     {
         if (!File.Exists(model))
             throw new Exception("Load or generate a runtime calibration model first.");
@@ -129,6 +129,9 @@ static class Backend
             throw new Exception("This calibration belongs to " + device.GetString() + ". Select that display or run a new calibration for this one.");
         var stage = Path.Combine(root, "build", "filter-stage");
         Directory.CreateDirectory(stage);
+        if (samplingCells < 256 || samplingCells > 1000000)
+            throw new ArgumentOutOfRangeException(nameof(samplingCells));
+        File.WriteAllBytes(Path.Combine(stage, "sampling.bin"), BitConverter.GetBytes((uint)samplingCells));
         var vpath = Path.Combine(stage, "vcgt.bin");
         if (File.Exists(vpath))
             File.Delete(vpath);
@@ -150,7 +153,7 @@ static class Backend
         AllowDwmRead(luts, true);
         foreach (var old in Directory.GetFiles(luts, "*.cube"))
             File.Delete(old);
-        foreach (var file in new[] { "runtime.bin", "vcgt.bin", "hook-addresses.bin", "profile-enabled.bin" })
+        foreach (var file in new[] { "runtime.bin", "vcgt.bin", "hook-addresses.bin", "profile-enabled.bin", "sampling.bin" })
         {
             var src = Path.Combine(stage, file);
             var dst = Path.Combine(runtime, file);

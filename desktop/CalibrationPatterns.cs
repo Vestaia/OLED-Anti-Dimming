@@ -65,25 +65,73 @@ static partial class ManagedCalibration
         }
         else
             throw new FileNotFoundException("Histogram calibration requires its pattern asset", scene.asset);
-        double half = Math.Sqrt(scene.area) * .5;
-        double[] Sample(double u, double v) => pixels[Math.Clamp((int)(v * height), 0, height - 1) * width + Math.Clamp((int)(u * width), 0, width - 1)];
-        for (int y = 0; y < 64; y++)
-            for (int x = 0; x < 128; x++)
+        // Count exact raster coverage of every source texel. Point sampling is
+        // separable, so this costs O(display width + height + texture pixels),
+        // rather than sampling or walking the full display for every scene.
+        float half = MathF.Sqrt((float)scene.area) * .5f;
+        int displayWidth = scene.display_width, displayHeight = scene.display_height;
+        int side = ProbePattern.Side(displayWidth, displayHeight);
+        int left = (displayWidth - side) / 2, top = (displayHeight - side) / 2;
+        (long[] all, long[] probe, long probeSize) Counts(int length, int texels, int origin)
+        {
+            var all = new long[texels];
+            var probe = new long[texels];
+            long probeSize = 0;
+            for (int i = 0; i < length; i++)
             {
-                double u = (x + .5) / 128, v = (y + .5) / 64;
-                int px = (int)(u * scene.display_width), py = (int)(v * scene.display_height);
-                if (scene.mosaic_probe)
-                {
-                    u = (px + .5) / scene.display_width;
-                    v = (py + .5) / scene.display_height;
-                }
-                double dx = Math.Abs(u - .5), dy = Math.Abs(v - .5);
-                int side = ProbePattern.Side(scene.display_width, scene.display_height), left = (scene.display_width - side) / 2, top = (scene.display_height - side) / 2;
-                bool probe = scene.mosaic_probe ? px >= left && px < left + side && py >= top && py < top + side : dx <= .05 && dy <= .05;
-                double[] c = probe ? (scene.mosaic_probe ? ProbePattern.Pixel(px - left, py - top) : [.4, .4, .4]) : dx <= half && dy <= half ? Sample((u - .5) / (2 * half) + .5, (v - .5) / (2 * half) + .5) : [0, 0, 0];
-                HistogramPca.Add(h, c, 1.0 / 8192);
+                float uv = (i + .5f) / length;
+                bool inProbe = scene.mosaic_probe ? i >= origin && i < origin + side : MathF.Abs(uv - .5f) <= .05f;
+                if (inProbe)
+                    probeSize++;
+                if (MathF.Abs(uv - .5f) > half)
+                    continue;
+                float source = (uv - .5f) / (2 * half) + .5f;
+                int texel = Math.Clamp((int)(source * texels), 0, texels - 1);
+                all[texel]++;
+                if (inProbe)
+                    probe[texel]++;
             }
+            return (all, probe, probeSize);
+        }
+        var xs = Counts(displayWidth, width, left);
+        var ys = Counts(displayHeight, height, top);
+        double total = (double)displayWidth * displayHeight;
+        long colored = 0;
+        for (int y = 0; y < height; y++)
+            for (int x = 0; x < width; x++)
+            {
+                long count = xs.all[x] * ys.all[y] - xs.probe[x] * ys.probe[y];
+                if (count == 0)
+                    continue;
+                colored += count;
+                HistogramPca.Add(h, pixels[y * width + x], count / total);
+            }
+        long probePixels = xs.probeSize * ys.probeSize;
+        HistogramPca.Add(h, [0, 0, 0], (total - colored - probePixels) / total);
+        if (scene.mosaic_probe)
+        {
+            var probeHistogram = ExactProbeHistogram(side);
+            for (int i = 0; i < h.Length; i++)
+                h[i] += probeHistogram[i] / total;
+        }
+        else
+            HistogramPca.Add(h, [.4, .4, .4], probePixels / total);
         return h;
+    }
+    static readonly Dictionary<int, double[]> exactProbeHistograms = new();
+    static double[] ExactProbeHistogram(int side)
+    {
+        lock (exactProbeHistograms)
+        {
+            if (exactProbeHistograms.TryGetValue(side, out var cached))
+                return cached;
+            var h = new double[HistogramPca.Bins];
+            for (int y = 0; y < side; y++)
+                for (int x = 0; x < side; x++)
+                    HistogramPca.Add(h, ProbePattern.Pixel(x, y));
+            exactProbeHistograms.Add(side, h);
+            return h;
+        }
     }
     public static void AddBenchmarks(string root, string folder, CalibrationMetadata meta)
     {

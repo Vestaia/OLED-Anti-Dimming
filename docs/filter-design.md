@@ -41,9 +41,13 @@ optimizations. See [hook stability](hook-stability.md) for evidence and limits.
 
 ### Display subsampling and three-dimensional histogram
 
-Each frame uses a fixed **128 × 64 grid**, or 8,192 samples, spanning the actual
-display buffer. Sample coordinates are scaled independently by width and height,
-so other resolutions and aspect ratios retain full-buffer coverage. This is a
+Each frame uses a user-selected sampling density: Quality targets 60,000 cells,
+Balanced (default) 25,000, Performance 10,000, and Custom 256 to 1,000,000.
+Grid width is rounded from `sqrt(cells * width / height)`; height is rounded
+from `cells / grid_width`. Dimensions are capped at the source texture size.
+The preview uses the selected display aspect ratio; runtime uses the actual
+DWM texture aspect ratio. Apply system-wide activates the selected setting;
+it is saved alongside the selected model and restored at startup. This is a
 spatial approximation: small features can be missed, and moving content can
 slightly alter the sampled distribution.
 
@@ -54,7 +58,7 @@ channel is encoded as `sqrt(max(channel_nits, 0) / 10000)`, then assigned to an
 eight neighboring bins, reducing discontinuities at bin boundaries. Encoding
 bounds affect the descriptor only; they do not clamp rendered highlights.
 
-The GPU builds 32 histograms in workgroup-local shared memory using integer
+The GPU builds one histogram per 16 ? 16 sampling workgroup in workgroup-local shared memory using integer
 atomics, then reduces them. The normalized histogram preserves multimodal
 distributions and relative population weights. It deliberately discards spatial
 layout and temporal history; it cannot represent layout-sensitive or long-term
@@ -69,8 +73,8 @@ iteration on their covariance to learn **14 principal components**. This step
 requires no camera labels. The basis is frozen across acquisition and refinement.
 
 At runtime, the GPU projects the scene histogram relative to an all-black
-histogram onto the exported basis. A Gaussian radial-basis model, fitted with
-regularization to measured log gains and scaled PCA coordinates, predicts the
+histogram onto the exported basis. A normalized inverse-distance (Shepard) model blends measured log gains
+in scaled PCA coordinates and predicts the
 correction. An explicit black anchor establishes the baseline. The prediction
 is converted to a gain of at least one; CPU and GPU encoders and inference are
 checked for agreement. PCA is lossy: distributions indistinguishable in these

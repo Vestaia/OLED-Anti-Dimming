@@ -77,7 +77,7 @@ static partial class ManagedCalibration
     }
     public static CalibrationMetadata GamutSeeds(string folder, string monitor, double peak, bool express = false, int displayWidth = 2560, int displayHeight = 1440, bool mosaic = true)
     {
-        var meta = new CalibrationMetadata { histogram_pca = true, gamut_sampling_version = 1, pattern_version = 3, monitor_device = monitor, peak_content_nits = peak, express_mode = express, mosaic_probe = mosaic, display_width = displayWidth, display_height = displayHeight };
+        var meta = new CalibrationMetadata { histogram_pca = true, gamut_sampling_version = 1, pattern_version = 4, monitor_device = monitor, peak_content_nits = peak, express_mode = express, mosaic_probe = mosaic, display_width = displayWidth, display_height = displayHeight };
         var points = GamutPoints(peak, express ? 4 : 8);
         for (int i = 0; i < points.Count; i++)
         {
@@ -288,6 +288,8 @@ static partial class ManagedCalibration
         else
         {
             meta = JsonSerializer.Deserialize<CalibrationMetadata>(File.ReadAllText(Path.Combine(output, "metadata.json")))!;
+            if (meta.pattern_version < 4)
+                throw new Exception("Use New calibration to replace subsampled pattern statistics with exact pattern distributions.");
             if (meta.monitor_device != monitor || Math.Abs(meta.peak_content_nits - peak) > 1e-6 || meta.express_mode != express)
                 throw new Exception("Use New calibration when changing display, peak brightness or mode for gamut calibration.");
             var screen = Screen.AllScreens.First(s => s.DeviceName == monitor);

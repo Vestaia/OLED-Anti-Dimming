@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0 (beta)
+
+- Added Quality (~60,000 cells), Balanced (~25,000), Performance (~10,000), and Custom screen sampling densities, with aspect-aware grids.
+- Calibration now counts exact generated pattern distributions, including the full reference mosaic, instead of subsampling known patterns.
+- New calibrations use normalized inverse-distance interpolation of measured corrections, avoiding the Gaussian RBF fallback toward unity in sparse regions.
+- Existing models remain usable with their original interpolation. A new calibration is required to adopt exact pattern statistics and the new interpolation.
+
+Sign out once before applying this build if a previous hook is already loaded.
+
 ## 0.2.0 (beta)
 
 - Added an original monitor icon for the executable, application window, and system tray.

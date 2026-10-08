@@ -5,6 +5,7 @@
 #include <vector>
 #include <stdexcept>
 #include <unordered_map>
+#include <cmath>
 using Microsoft::WRL::ComPtr;
 struct AdaptiveFilter
 {
@@ -14,6 +15,8 @@ struct AdaptiveFilter
              pad = 0;
         float peak = 250, baseline = 0, epsilon = .3f, white = 250;
         float scale[16]{};
+        UINT gridWidth = 1, gridHeight = 1, groupsX = 1, groupsY = 1;
+        UINT localNeighbors = 0, reserved[3]{};
     } config;
     struct Frame
     {
@@ -22,6 +25,7 @@ struct AdaptiveFilter
     };
     std::unordered_map<void *, Frame> frames;
     bool profileEnabled = false;
+    UINT samplingCells = 25000, partialGroups = 0;
     ComPtr<ID3D11ComputeShader> features, infer;
     ComPtr<ID3D11PixelShader> pixel;
     ComPtr<ID3D11Buffer> constants, partials, result, model, basis;
@@ -40,6 +44,10 @@ struct AdaptiveFilter
     }
     void initialize(ID3D11Device *d, const wchar_t *folder, const char *shader)
     {
+        std::ifstream sampling(std::wstring(folder) + L"\\sampling.bin", std::ios::binary);
+        if (sampling) read(sampling, samplingCells);
+        if (samplingCells < 256 || samplingCells > 1000000)
+            throw std::runtime_error("Invalid sampling cell count");
         std::ifstream profileFlag(std::wstring(folder) + L"\\profile-enabled.bin",
                                   std::ios::binary);
         UINT enabledProfile = 0;
@@ -62,8 +70,9 @@ struct AdaptiveFilter
         if (f)
         {
             read(f, magic);
-            if (magic != 0x324c5041)
+            if (magic != 0x324c5041 && magic != 0x334c5041)
                 throw std::runtime_error("Unsupported runtime model");
+            config.localNeighbors = magic == 0x334c5041;
             config.pad = 1;
             read(f, config.count);
             read(f, config.peak);
@@ -106,10 +115,8 @@ struct AdaptiveFilter
             require(d->CreateBuffer(&bd, data ? &init : nullptr, &dest));
         };
         buffer(sizeof(Config), D3D11_BIND_CONSTANT_BUFFER, 0, nullptr, constants);
-        buffer(32 * 512 * 4, D3D11_BIND_UNORDERED_ACCESS, 16, nullptr, partials);
         buffer(16, D3D11_BIND_UNORDERED_ACCESS | D3D11_BIND_SHADER_RESOURCE, 16, nullptr, result);
         buffer(UINT(weights.size() * 4), D3D11_BIND_SHADER_RESOURCE, 16, weights.data(), model);
-        require(d->CreateUnorderedAccessView(partials.Get(), nullptr, &partialUav));
         require(d->CreateUnorderedAccessView(result.Get(), nullptr, &resultUav));
         require(d->CreateShaderResourceView(result.Get(), nullptr, &resultView));
         require(d->CreateShaderResourceView(model.Get(), nullptr, &modelView));
@@ -223,6 +230,24 @@ struct AdaptiveFilter
             }
         config.width = desc.Width;
         config.height = desc.Height;
+        config.gridWidth = (std::min)(desc.Width, (std::max)(1u, UINT(std::round(std::sqrt(double(samplingCells) * desc.Width / desc.Height)))));
+        config.gridHeight = (std::min)(desc.Height, (std::max)(1u, UINT(std::round(double(samplingCells) / config.gridWidth))));
+        config.groupsX = (config.gridWidth + 15) / 16;
+        config.groupsY = (config.gridHeight + 15) / 16;
+        UINT groups = config.groupsX * config.groupsY;
+        if (groups != partialGroups)
+        {
+            partialUav.Reset(); partials.Reset();
+            D3D11_BUFFER_DESC bd{};
+            bd.ByteWidth = groups * 512 * sizeof(float);
+            bd.Usage = D3D11_USAGE_DEFAULT;
+            bd.BindFlags = D3D11_BIND_UNORDERED_ACCESS;
+            bd.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+            bd.StructureByteStride = 16;
+            require(d->CreateBuffer(&bd, nullptr, &partials));
+            require(d->CreateUnorderedAccessView(partials.Get(), nullptr, &partialUav));
+            partialGroups = groups;
+        }
         config.hdr = hdr;
         config.profileSize = profileEnabled ? size : 0;
         c->UpdateSubresource(constants.Get(), 0, nullptr, &config, 0, 0);
@@ -235,7 +260,7 @@ struct AdaptiveFilter
         ID3D11UnorderedAccessView *uavs[2]{partialUav.Get(), resultUav.Get()};
         c->CSSetUnorderedAccessViews(0, 2, uavs, nullptr);
         c->CSSetShader(features.Get(), nullptr, 0);
-        c->Dispatch(8, 4, 1);
+        c->Dispatch(config.groupsX, config.groupsY, 1);
         c->CSSetShader(infer.Get(), nullptr, 0);
         c->Dispatch(1, 1, 1);
         ID3D11UnorderedAccessView *nil[2]{};
