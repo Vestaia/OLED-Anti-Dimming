@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 using System.Diagnostics;
 using System.Text.Json;
 
@@ -221,11 +222,17 @@ sealed class MainWindow : Form
         }
         log.AppendText(s + Environment.NewLine);
     }
-    async Task HookAction(Func<Task> action) => await Guard(async () => {
-        if(busy||toggling)throw new InvalidOperationException("Wait for the current operation to finish.");
-        toggling=true;apply.Enabled=disable.Enabled=calibrate.Enabled=refine.Enabled=refineWhite.Enabled=false;
-        try{await action();}
-        finally{toggling=false;apply.Enabled=disable.Enabled=calibrate.Enabled=refine.Enabled=refineWhite.Enabled=true;}
+    async Task HookAction(Func<Task> action) => await Guard(async () =>
+    {
+        if (busy || toggling)
+            throw new InvalidOperationException("Wait for the current operation to finish.");
+        toggling = true;
+        apply.Enabled = disable.Enabled = calibrate.Enabled = refine.Enabled = refineWhite.Enabled = false;
+        try
+        {
+            await action();
+        }
+        finally { toggling = false; apply.Enabled = disable.Enabled = calibrate.Enabled = refine.Enabled = refineWhite.Enabled = true; }
     });
     async Task Guard(Func<Task> action)
     {
@@ -237,7 +244,7 @@ sealed class MainWindow : Form
     }
     async Task Calibration(bool fresh, bool whitesOnly = false) => await Guard(async () =>
     {
-        if(!fresh&&(!File.Exists(model.Text)||!File.Exists(Path.Combine(Path.GetDirectoryName(model.Text)!,"metadata.json"))))
+        if (!fresh && (!File.Exists(model.Text) || !File.Exists(Path.Combine(Path.GetDirectoryName(model.Text)!, "metadata.json"))))
             throw new InvalidOperationException("No complete calibration is selected. Choose New calibration, or select a saved model with its calibration reports.");
         if (!fresh && File.Exists(model.Text))
         {

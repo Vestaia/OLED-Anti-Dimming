@@ -1,4 +1,8 @@
-$ErrorActionPreference = 'Stop'
-$probeExe = Join-Path $PSScriptRoot 'build\hdr-probe.exe'
-if (-not (Test-Path -LiteralPath $probeExe)) { & "$PSScriptRoot\build.ps1" }
-Start-Process -FilePath $probeExe -WorkingDirectory "$PSScriptRoot\build" -WindowStyle Hidden
+# SPDX-License-Identifier: GPL-3.0-only
+$ErrorActionPreference='Stop'
+$application=Join-Path $PSScriptRoot 'build/single/OledCalibration.exe'
+if(-not (Test-Path -LiteralPath $application)) {
+    & "$PSScriptRoot/build-single.ps1"
+    if($LASTEXITCODE -ne 0){throw 'Application build failed'}
+}
+Start-Process -FilePath $application -WorkingDirectory $PSScriptRoot -WindowStyle Hidden

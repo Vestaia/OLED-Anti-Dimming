@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 using System.Text.Json;
 
 namespace OledCalibration;
@@ -14,8 +15,18 @@ sealed class CalibrationModel
     {
         using var json = JsonDocument.Parse(File.ReadAllText(path));
         var r = json.RootElement;
-        if(!r.TryGetProperty("histogram_pca",out var encoder)||encoder.ValueKind==JsonValueKind.Null)throw new Exception("Select a PCA model, or use the archived pre-PCA release.");
-        return new CalibrationModel { Centers = r.GetProperty("centers").EnumerateArray().Select(a => a.EnumerateArray().Select(v => v.GetDouble()).ToArray()).ToArray(), Coefficients = r.GetProperty("coefficients").EnumerateArray().Select(v => v.GetDouble()).ToArray(), Scale = r.GetProperty("scale").EnumerateArray().Select(v => v.GetDouble()).ToArray(), Histogram = r.TryGetProperty("histogram_pca", out var h) && h.ValueKind != JsonValueKind.Null ? JsonSerializer.Deserialize<HistogramPca>(h.GetRawText()) : null, Baseline = r.GetProperty("baseline").GetDouble() };
+        if (!r.TryGetProperty("histogram_pca", out var encoder) || encoder.ValueKind == JsonValueKind.Null)
+            throw new InvalidDataException("Create a new PCA calibration. This model has no histogram encoder.");
+        var model = new CalibrationModel { Centers = r.GetProperty("centers").EnumerateArray().Select(a => a.EnumerateArray().Select(v => v.GetDouble()).ToArray()).ToArray(), Coefficients = r.GetProperty("coefficients").EnumerateArray().Select(v => v.GetDouble()).ToArray(), Scale = r.GetProperty("scale").EnumerateArray().Select(v => v.GetDouble()).ToArray(), Histogram = JsonSerializer.Deserialize<HistogramPca>(encoder.GetRawText()), Baseline = r.GetProperty("baseline").GetDouble() };
+        const int dimensions = HistogramPca.Components;
+        if (model.Histogram?.Basis is not { Length: dimensions } basis ||
+            basis.Any(row => row is null || row.Length != HistogramPca.Bins || row.Any(v => !double.IsFinite(v))) ||
+            model.Scale.Length != dimensions || model.Scale.Any(v => !double.IsFinite(v) || v <= 0) ||
+            model.Centers.Length == 0 || model.Centers.Length > 2048 || model.Centers.Length != model.Coefficients.Length ||
+            model.Centers.Any(row => row.Length != dimensions || row.Any(v => !double.IsFinite(v))) ||
+            model.Coefficients.Any(v => !double.IsFinite(v)) || !double.IsFinite(model.Baseline))
+            throw new InvalidDataException("Calibration model has invalid dimensions or numeric values. Create a new calibration.");
+        return model;
     }
     public HistogramPca? Histogram;
     public double Predict(CalibrationScene scene) => Predict((Histogram ?? throw new Exception("PCA encoder is missing")).Project(scene.Histogram()));

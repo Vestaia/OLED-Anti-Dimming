@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 using System.Text.Json;
 using System.Security.Cryptography;
 
@@ -52,23 +53,36 @@ static partial class ManagedCalibration
     }
     public static double[] SceneHistogram(CalibrationScene scene)
     {
-        var h=new double[HistogramPca.Bins];
-        double[][] pixels; int width,height;
-        if(File.Exists(scene.asset)) (pixels,width,height)=Texture(scene.asset);
-        else if(scene.asset=="" && scene.moments.Length==14) {pixels=[scene.moments.Take(3).ToArray()];width=height=1;}
-        else throw new FileNotFoundException("Histogram calibration requires its pattern asset",scene.asset);
-        double half=Math.Sqrt(scene.area)*.5;
-        double[] Sample(double u,double v) => pixels[Math.Clamp((int)(v*height),0,height-1)*width+Math.Clamp((int)(u*width),0,width-1)];
-        for(int y=0;y<64;y++)for(int x=0;x<128;x++) {
-            double u=(x+.5)/128,v=(y+.5)/64;
-            int px=(int)(u*scene.display_width),py=(int)(v*scene.display_height);
-            if(scene.mosaic_probe){u=(px+.5)/scene.display_width;v=(py+.5)/scene.display_height;}
-            double dx=Math.Abs(u-.5),dy=Math.Abs(v-.5);
-            int side=ProbePattern.Side(scene.display_width,scene.display_height),left=(scene.display_width-side)/2,top=(scene.display_height-side)/2;
-            bool probe=scene.mosaic_probe?px>=left&&px<left+side&&py>=top&&py<top+side:dx<=.05&&dy<=.05;
-            double[] c=probe?(scene.mosaic_probe?ProbePattern.Pixel(px-left,py-top):[.4,.4,.4]):dx<=half&&dy<=half?Sample((u-.5)/(2*half)+.5,(v-.5)/(2*half)+.5):[0,0,0];
-            HistogramPca.Add(h,c,1.0/8192);
+        var h = new double[HistogramPca.Bins];
+        double[][] pixels;
+        int width, height;
+        if (File.Exists(scene.asset))
+            (pixels, width, height) = Texture(scene.asset);
+        else if (scene.asset == "" && scene.moments.Length == 14)
+        {
+            pixels = [scene.moments.Take(3).ToArray()];
+            width = height = 1;
         }
+        else
+            throw new FileNotFoundException("Histogram calibration requires its pattern asset", scene.asset);
+        double half = Math.Sqrt(scene.area) * .5;
+        double[] Sample(double u, double v) => pixels[Math.Clamp((int)(v * height), 0, height - 1) * width + Math.Clamp((int)(u * width), 0, width - 1)];
+        for (int y = 0; y < 64; y++)
+            for (int x = 0; x < 128; x++)
+            {
+                double u = (x + .5) / 128, v = (y + .5) / 64;
+                int px = (int)(u * scene.display_width), py = (int)(v * scene.display_height);
+                if (scene.mosaic_probe)
+                {
+                    u = (px + .5) / scene.display_width;
+                    v = (py + .5) / scene.display_height;
+                }
+                double dx = Math.Abs(u - .5), dy = Math.Abs(v - .5);
+                int side = ProbePattern.Side(scene.display_width, scene.display_height), left = (scene.display_width - side) / 2, top = (scene.display_height - side) / 2;
+                bool probe = scene.mosaic_probe ? px >= left && px < left + side && py >= top && py < top + side : dx <= .05 && dy <= .05;
+                double[] c = probe ? (scene.mosaic_probe ? ProbePattern.Pixel(px - left, py - top) : [.4, .4, .4]) : dx <= half && dy <= half ? Sample((u - .5) / (2 * half) + .5, (v - .5) / (2 * half) + .5) : [0, 0, 0];
+                HistogramPca.Add(h, c, 1.0 / 8192);
+            }
         return h;
     }
     public static void AddBenchmarks(string root, string folder, CalibrationMetadata meta)

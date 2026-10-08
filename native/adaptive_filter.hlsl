@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Feature statistics are descriptive, not an additive subpixel-power model.
 Texture2D<float4> Scene : register(t0);
 Texture3D<float4> Profile : register(t1);

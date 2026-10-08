@@ -1,0 +1,11 @@
+* text=auto
+*.cs text eol=lf
+*.cpp text eol=lf
+*.hpp text eol=lf
+*.hlsl text eol=lf
+*.asm text eol=lf
+*.py text eol=lf
+*.ps1 text eol=lf
+*.md text eol=lf
+*.png binary
+*.jpg binary

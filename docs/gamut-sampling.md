@@ -1,7 +1,7 @@
-# Adaptive gamut sampling POC
+# Adaptive gamut sampling
 
 Click **New calibration**. This release supports only PCA gamut calibration.
-Use the archived executable for pre-PCA models. The reference square remains 100 nits. Panel peak sets
+The reference square remains 100 nits. Panel peak sets
 nominal pattern bounds, not a cap on correction or displayed signals.
 
 ## Coarse coverage
@@ -51,29 +51,16 @@ A region stops receiving refinement when its camera matching error is within
 1% of reference camera code, with a 0.5-code floor. This is a camera matching
 criterion, **not a claim of 1% luminance or perceptual accuracy**. Checks with
 unstable closing references are excluded; detected panel plateaus are not
-repeatedly chased. Refinement is bounded by the UI round limit (selecting the PCA
-option suggests three rounds). Remaining reachable errors are saved in
+repeatedly chased. Refinement is bounded by the UI round limit. Remaining reachable errors are saved in
 `gamut-status.json`; completion does not silently mean every error converged.
 After local rounds a final full validation checks for regressions elsewhere.
 Training/model checkpoints are retained after each completed fit.
 
-## Verification and rollback
+## Verification
 
-`--gamut-self-test` checks cube geometry, gray axis, interior spacing, clustered
-mode counts, nominal peak, histogram mass, novel probes and refinement samples,
-passing-region stopping, plateau exclusion and metadata roundtrip. It does not
-open the camera. Physical accuracy and actual calibration duration remain to be
-measured. Runtime shaders and GPU sampling cost are unchanged by this schedule.
-
-The unchanged pre-PCA executable is preserved at
-`releases/pre-pca/OledCalibration.exe`, with its SHA-256 and rollback instructions.
-New PCA exports use JSON version 2, so the old release rejects them when applying
-rather than misinterpreting PCA coordinates as moments. The current release also
-reads first-PCA version-1 exports. Select the original moment-model JSON when using
-the rollback executable. Existing calibration reports
-have not been overwritten. The first PCA source tree is also archived separately
-at `releases/pca-first/source.zip`.
-
+Run `./test.ps1` for offline geometry, histogram, model, camera-controller and GPU
+regressions. The initial Git commit preserves previous prototypes for reference.
+Physical accuracy and calibration duration require testing on the target monitor.
 
 ## Random mosaic probe experiment
 
@@ -95,7 +82,7 @@ The square's actual mosaic distribution contributes to calibration histograms.
 Existing white-probe calibrations keep their original reference and geometry;
 a new calibration is required to try the mosaic. Mosaic refinement refuses a
 changed display resolution, since the probe pattern and raster sampling change.
-Pre-PCA rollback remains available. Generated probe names include the parent
+Previous source remains in Git history. Generated probe names include the parent
 phase and metadata sequence, preventing repeated `probes` folders from creating
 duplicate dictionary keys.
 
@@ -117,9 +104,5 @@ calibration, Initial validation, Refinement step N, Final validation and Saving.
 Individual reference/matching/confirmation events still update the numeric bar
 but do not replace these phase labels.
 
-`experiments/plot_gamut_samples.py CALIBRATION --output OUTPUT` exports a standalone
-3D PNG/SVG scatter and provenance JSON. It uses only measured training/validation
-states from the saved calibration, excluding skipped states. All unique nominal
-texture colors and the shared per-pixel mosaic are plotted; identical texture
-colors reused at different window areas are drawn once. Gain-search intermediate
-signals are not shown. The latest requested plot is in reports/gamut-sanity-latest.
+The README includes an example scatter plot from a completed calibration. Its
+nominal colors illustrate coverage and do not establish luminance accuracy.

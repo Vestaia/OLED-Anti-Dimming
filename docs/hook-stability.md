@@ -33,7 +33,7 @@ passes. Disable now calls MH_DisableHook for all detours without freeing their
 trampolines or the pinned DLL.
 
 Evidence: build/crash-evidence/overlay-disassembly.txt; regression source
-native/overlay_hook_test.cpp and native/overlay_hook_test.asm. The regression
+tests/native/overlay_hook_test.cpp and tests/native/overlay_hook_test.asm. The regression
 requires build/dwm-symbols.txt from hook-probe --inspect and a matching
 hook-addresses.bin, and links the existing MinHook library plus overlay_hook.asm.
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 using System.Diagnostics;
 
 namespace OledCalibration;
@@ -43,7 +44,7 @@ static partial class ManagedCalibration
                 {
                     var status = File.ReadAllText(progressFile).Trim().Split(',');
                     if (status.Length == 3 && int.TryParse(status[0], out int done) && int.TryParse(status[1], out int total) && total > 0)
-                        Step(acquisitionStart + (acquisitionEnd - acquisitionStart) * Math.Clamp(done, 0, total) / total, status[2]=="Camera sync"?"Camera latency calibration":acquisitionPhase);
+                        Step(acquisitionStart + (acquisitionEnd - acquisitionStart) * Math.Clamp(done, 0, total) / total, status[2] == "Camera sync" ? "Camera latency calibration" : acquisitionPhase);
                 }
                 catch (IOException) { }
             }

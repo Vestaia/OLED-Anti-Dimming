@@ -1,7 +1,7 @@
-# Experimental histogram PCA model
+# Histogram PCA model
 
 Click **New calibration**. PCA is the only model in the current application;
-pre-PCA models are supported by the archived executable in releases/pre-pca.
+Previous prototypes remain available in the initial Git commit.
 No extra camera measurements are needed to learn the PCA basis. New calibrations
 use [adaptive gamut sampling](gamut-sampling.md); earlier PCA reports retain their
 original schedule.
@@ -34,19 +34,13 @@ scene distributions, matching runtime analysis before the uniform gain.
 and no CPU readback. Two compute dispatches accumulate/project the histogram and
 evaluate the correction. Inference distributes RBF centers over 128 threads.
 The FP16 scRGB pixel pass still multiplies all channels by one uniform gain.
-Runtime binary APL2 embeds the PCA basis; APL1 moment binaries are supported only by the archived executable.
+Runtime binary APL2 embeds the PCA basis; older moment binaries are rejected.
 PCA JSON carries the basis, so subsequent versions do not silently change it.
 
 ## Initial checks and limitations
 
-`OledCalibration.exe --histogram-self-test` checks mass conservation, separation
-of equal-mean white versus mixed RGB, orthonormality, model roundtrip and binary
-export. `build/filter-test.exe histogram-test-config --benchmark` (from build)
-checks actual GPU/CPU agreement, black anchor and uniform linear pixel output.
-It benchmarks full-area copying, compute and pixel filtering at 2560 ? 1440 with
-FP16 textures, 2,000 warm-up frames and 1,000 measured frames. The test does not
-inject DWM or open the camera. `histogram-test-512` pads the synthetic 81-center
-model with zero-weight centers to measure larger inference workloads.
+Run `./test.ps1` for managed histogram and model checks and native GPU agreement
+checks. Tests run separately from the production application.
 
 On the local RTX 4070 Ti, the warmed 81-center run measured approximately 133 us
 per complete test frame, 40 us for the pixel pass alone and 8.8 us for analysis

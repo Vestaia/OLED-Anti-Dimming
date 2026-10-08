@@ -1,3 +1,4 @@
+; SPDX-License-Identifier: GPL-3.0-only
 ; DWM's private leaf-function callers rely on more than the public x64 ABI.
 ; Preserve every volatile register except the boolean result in AL.
 EXTERN OledOverlaysEnabledImpl:PROC

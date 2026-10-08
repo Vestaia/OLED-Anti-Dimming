@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 using System.Text.Json;
 
 namespace OledCalibration;
@@ -6,9 +7,11 @@ static partial class ManagedCalibration
 {
     static string CompactLabel(string name, int index)
     {
-        foreach(var (prefix,label) in new[]{("gamut-solid-","S"),("gamut-cluster-","C")})
-            if(name.StartsWith(prefix))return label+name[prefix.Length..].Split('_')[0];
-        if(name.StartsWith("gamut-probe-"))return "P"+(index+1);
+        foreach (var (prefix, label) in new[] { ("gamut-solid-", "S"), ("gamut-cluster-", "C") })
+            if (name.StartsWith(prefix))
+                return label + name[prefix.Length..].Split('_')[0];
+        if (name.StartsWith("gamut-probe-"))
+            return "P" + (index + 1);
         if (name.StartsWith("neutral-fine-nits-"))
             return name[18..] + "n";
         if (name.StartsWith("neutral-fine-"))

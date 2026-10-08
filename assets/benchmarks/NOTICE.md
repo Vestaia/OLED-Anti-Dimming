@@ -10,7 +10,7 @@ download URL and SHA-256. Runtime verifies each bundled image against its hash.
   https://commons.wikimedia.org/wiki/File:Grand_prismatic_spring.jpg
 
 These assets impose no image-license requirement to relicense the application,
-and can accompany an application using the Sustainable Use License. Source pages
+and can accompany an application using GPLv3. Source pages
 describe their U.S. public-domain status. Credits are retained as provenance;
 they do not imply endorsement by NASA or NPS.
 

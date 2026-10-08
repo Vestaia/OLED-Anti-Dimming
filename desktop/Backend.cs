@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
@@ -14,22 +15,31 @@ static class Backend
     {
         get
         {
-            if(StandaloneRuntime.Root==null)return Root;
-            string folder=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"OledCalibration","data");
-            Directory.CreateDirectory(Path.Combine(folder,"build"));
-            Directory.CreateDirectory(Path.Combine(folder,"reports","adaptive"));
-            string settings=Path.Combine(folder,"build","managed-settings.json");
-            if(!File.Exists(settings))
+            if (StandaloneRuntime.Root == null)
+                return Root;
+            string folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OledCalibration", "data");
+            Directory.CreateDirectory(Path.Combine(folder, "build"));
+            Directory.CreateDirectory(Path.Combine(folder, "reports", "adaptive"));
+            string settings = Path.Combine(folder, "build", "managed-settings.json");
+            if (!File.Exists(settings))
             {
-                string packages=Directory.GetParent(Root)!.FullName;
+                string packages = Directory.GetParent(Root)!.FullName;
                 // Preserve old reports in place; recover their absolute model
                 // selection without moving files used by a running version.
-                foreach(string old in Directory.GetFiles(packages,"managed-settings.json",SearchOption.AllDirectories).OrderByDescending(File.GetLastWriteTimeUtc))
+                foreach (string old in Directory.GetFiles(packages, "managed-settings.json", SearchOption.AllDirectories).OrderByDescending(File.GetLastWriteTimeUtc))
                 {
-                    try{
-                        string? model=JsonDocument.Parse(File.ReadAllText(old)).RootElement.GetProperty("model").GetString();
-                        if(File.Exists(model)){File.Copy(old,settings,false);break;}
-                    }catch(IOException){}catch(JsonException){}catch(KeyNotFoundException){}
+                    try
+                    {
+                        string? model = JsonDocument.Parse(File.ReadAllText(old)).RootElement.GetProperty("model").GetString();
+                        if (File.Exists(model))
+                        {
+                            File.Copy(old, settings, false);
+                            break;
+                        }
+                    }
+                    catch (IOException) { }
+                    catch (JsonException) { }
+                    catch (KeyNotFoundException) { }
                 }
             }
             return folder;
@@ -39,7 +49,8 @@ static class Backend
     {
         get
         {
-            if(StandaloneRuntime.Root is string packaged)return packaged;
+            if (StandaloneRuntime.Root is string packaged)
+                return packaged;
             var d = new DirectoryInfo(AppContext.BaseDirectory);
             while (d != null)
             {
@@ -68,7 +79,9 @@ static class Backend
     }
     public static void WriteModel(string json, string binary)
     {
-        var model = JsonDocument.Parse(File.ReadAllText(json)).RootElement;
+        _ = CalibrationModel.Load(json);
+        using var document = JsonDocument.Parse(File.ReadAllText(json));
+        var model = document.RootElement;
         if (model.GetProperty("version").GetInt32() is not (1 or 2) || model.GetProperty("features").GetInt32() != 14)
             throw new Exception("Unsupported model version or features");
         var centers = model.GetProperty("centers").EnumerateArray().ToArray();
@@ -77,8 +90,10 @@ static class Backend
             throw new Exception("Invalid model sample count");
         using var f = new BinaryWriter(File.Create(binary));
         bool histogram = model.TryGetProperty("histogram_pca", out var encoder) && encoder.ValueKind != JsonValueKind.Null;
-        if(!histogram)throw new Exception("This release applies PCA models only. Use the archived pre-PCA release for a moment model.");
-        if(model.GetProperty("version").GetInt32()==2&&!histogram)throw new Exception("PCA model is missing its encoder");
+        if (!histogram)
+            throw new InvalidDataException("Create a new PCA calibration. This model has no histogram encoder.");
+        if (model.GetProperty("version").GetInt32() == 2 && !histogram)
+            throw new Exception("PCA model is missing its encoder");
         f.Write(histogram ? 0x324c5041u : 0x314c5041u);
         f.Write((uint)centers.Length);
         foreach (var k in new[] { "peak", "baseline", "epsilon" })
@@ -95,10 +110,14 @@ static class Backend
             f.Write(coefficients[i].GetSingle());
             f.Write(0f);
         }
-        if(histogram) {
-            var basis=encoder.GetProperty("Basis").EnumerateArray().Select(r=>r.EnumerateArray().Select(v=>v.GetSingle()).ToArray()).ToArray();
-            if(basis.Length!=14||basis.Any(r=>r.Length!=512))throw new Exception("Invalid histogram PCA basis");
-            for(int bin=0;bin<512;bin++)for(int component=0;component<16;component++)f.Write(component<14?basis[component][bin]:0f);
+        if (histogram)
+        {
+            var basis = encoder.GetProperty("Basis").EnumerateArray().Select(r => r.EnumerateArray().Select(v => v.GetSingle()).ToArray()).ToArray();
+            if (basis.Length != 14 || basis.Any(r => r.Length != 512))
+                throw new Exception("Invalid histogram PCA basis");
+            for (int bin = 0; bin < 512; bin++)
+                for (int component = 0; component < 16; component++)
+                    f.Write(component < 14 ? basis[component][bin] : 0f);
         }
     }
     public static async Task Apply(string root, string model, bool hdr, Screen screen, Action<string> log)
@@ -121,7 +140,7 @@ static class Backend
         File.WriteAllText(Path.Combine(stage, "profile.cube"), "LUT_3D_SIZE 2\n0 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1\n");
         if (!new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator))
             throw new Exception("Filter files are prepared. Restart this GUI as administrator to apply to DWM; camera calibration can run without elevation.");
-        bool resident=Injector.IsLoaded();
+        bool resident = Injector.IsLoaded();
         Disable();
         var runtime = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Temp", "oled-apl");
         Directory.CreateDirectory(runtime);
@@ -142,13 +161,21 @@ static class Backend
         }
         File.Copy(Path.Combine(stage, "profile.cube"), Path.Combine(luts, $"{screen.Bounds.Left}_{screen.Bounds.Top}{(hdr ? "_hdr" : "")}.cube"), true);
         var dll = Path.Combine(runtime, "oled-apl-hook.dll");
-        string hookSource=Path.Combine(root,"build","oled-apl-hook.dll");
-        string binding=screen.DeviceName+"|"+hdr+"|"+screen.Bounds.ToString();
-        string bindingPath=Path.Combine(runtime,"resident-display.txt");
-        if(resident) {
-            if(!File.Exists(bindingPath)||File.ReadAllText(bindingPath)!=binding)throw new Exception("Changing the resident filter's display requires signing out and back in.");
-            if(!System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(hookSource)).SequenceEqual(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(dll))))throw new Exception("A previous hook version is resident. Sign out and back in before applying this build.");
-        } else {File.Copy(hookSource,dll,true);File.WriteAllText(bindingPath,binding);}
+        string hookSource = Path.Combine(root, "build", "oled-apl-hook.dll");
+        string binding = screen.DeviceName + "|" + hdr + "|" + screen.Bounds.ToString();
+        string bindingPath = Path.Combine(runtime, "resident-display.txt");
+        if (resident)
+        {
+            if (!File.Exists(bindingPath) || File.ReadAllText(bindingPath) != binding)
+                throw new Exception("Changing the resident filter's display requires signing out and back in.");
+            if (!System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(hookSource)).SequenceEqual(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(dll))))
+                throw new Exception("A previous hook version is resident. Sign out and back in before applying this build.");
+        }
+        else
+        {
+            File.Copy(hookSource, dll, true);
+            File.WriteAllText(bindingPath, binding);
+        }
         foreach (var file in Directory.GetFiles(runtime))
             AllowDwmRead(file, false);
         foreach (var file in Directory.GetFiles(luts))
@@ -159,7 +186,10 @@ static class Backend
         access.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier("S-1-5-90-0"), FileSystemRights.Write | FileSystemRights.Read, AccessControlType.Allow));
         new FileInfo(diagnostic).SetAccessControl(access);
         RefreshDesktop(); // Establish uncorrected pixels before the new pristine cache is seeded.
-        if(resident)Injector.Control(true);else Injector.Load(dll);
+        if (resident)
+            Injector.Control(true);
+        else
+            Injector.Load(dll);
         RefreshDesktop();
         log("DWM hook loaded for " + screen.DeviceName + "; full desktop redraw requested");
     }
@@ -222,7 +252,7 @@ static class Backend
         overlay.Close();
         DwmFlush();
     }
-    public static void SelfTest() => HistogramChecks.Run(Root);
+
 
 }
 
@@ -289,8 +319,8 @@ static class Injector
     {
         public RemoteTimeout() : base("DWM hook operation timed out; check its state before retrying.") { }
     }
-    static void Remote(IntPtr process,string entry,IntPtr argument)=>RemoteAt(process,GetProcAddress(GetModuleHandle("kernel32.dll"),entry),argument,entry);
-    static void RemoteAt(IntPtr process,IntPtr address,IntPtr argument,string entry)
+    static void Remote(IntPtr process, string entry, IntPtr argument) => RemoteAt(process, GetProcAddress(GetModuleHandle("kernel32.dll"), entry), argument, entry);
+    static void RemoteAt(IntPtr process, IntPtr address, IntPtr argument, string entry)
     {
         var thread = CreateRemoteThread(process, IntPtr.Zero, 0, address, argument, 0, out _);
         if (thread == IntPtr.Zero)
@@ -338,25 +368,42 @@ static class Injector
             }
         File.WriteAllText(Marker, "Loaded");
     });
-    [DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)]static extern IntPtr LoadLibraryEx(string path,IntPtr file,uint flags);
-    [DllImport("kernel32.dll")]static extern bool FreeLibrary(IntPtr module);
-    public static void Control(bool enable)=>AsSystem(()=> {
-        bool found=false;
-        foreach(var p in Targets())using(p)foreach(ProcessModule module in p.Modules) {
-            if(!module.ModuleName.Equals(Name,StringComparison.OrdinalIgnoreCase))continue;
-            found=true;var local=LoadLibraryEx(module.FileName,IntPtr.Zero,1); // Metadata mapping in GUI, no DllMain.
-            if(local==IntPtr.Zero)throw Error("Read resident filter exports");
-            try {
-                var export=GetProcAddress(local,"OledFilterControl");
-                if(export==IntPtr.Zero)throw new Exception("The loaded hook uses unsafe unloading. Sign out and back in before using this corrected build.");
-                var handle=OpenProcess(0x1f0fff,false,(uint)p.Id);if(handle==IntPtr.Zero)throw Error("Open DWM for filter control");
-                try {RemoteAt(handle,new IntPtr(module.BaseAddress.ToInt64()+export.ToInt64()-local.ToInt64()),enable?new IntPtr(1):IntPtr.Zero,"OledFilterControl");}
-                finally{CloseHandle(handle);}
-            }finally{FreeLibrary(local);} // Frees the GUI metadata mapping only.
-            break;
-        }
-        if(enable&&!found)throw new Exception("No resident filter in this session");
-        if(File.Exists(Marker))File.WriteAllText(Marker,enable?"Enabled":"Bypassed (DLL resident)");
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern IntPtr LoadLibraryEx(string path, IntPtr file, uint flags);
+    [DllImport("kernel32.dll")] static extern bool FreeLibrary(IntPtr module);
+    public static void Control(bool enable) => AsSystem(() =>
+    {
+        bool found = false;
+        foreach (var p in Targets())
+            using (p)
+                foreach (ProcessModule module in p.Modules)
+                {
+                    if (!module.ModuleName.Equals(Name, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    found = true;
+                    var local = LoadLibraryEx(module.FileName, IntPtr.Zero, 1); // Metadata mapping in GUI, no DllMain.
+                    if (local == IntPtr.Zero)
+                        throw Error("Read resident filter exports");
+                    try
+                    {
+                        var export = GetProcAddress(local, "OledFilterControl");
+                        if (export == IntPtr.Zero)
+                            throw new Exception("The loaded hook uses unsafe unloading. Sign out and back in before using this corrected build.");
+                        var handle = OpenProcess(0x1f0fff, false, (uint)p.Id);
+                        if (handle == IntPtr.Zero)
+                            throw Error("Open DWM for filter control");
+                        try
+                        {
+                            RemoteAt(handle, new IntPtr(module.BaseAddress.ToInt64() + export.ToInt64() - local.ToInt64()), enable ? new IntPtr(1) : IntPtr.Zero, "OledFilterControl");
+                        }
+                        finally { CloseHandle(handle); }
+                    }
+                    finally { FreeLibrary(local); } // Frees the GUI metadata mapping only.
+                    break;
+                }
+        if (enable && !found)
+            throw new Exception("No resident filter in this session");
+        if (File.Exists(Marker))
+            File.WriteAllText(Marker, enable ? "Enabled" : "Bypassed (DLL resident)");
     });
-    public static void Unload()=>Control(false);
+    public static void Unload() => Control(false);
 }
