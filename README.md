@@ -8,21 +8,22 @@ A Windows utility that reduces content-dependent OLED dimming through webcam cal
 
 ![Example camera placement during calibration](assets/documentation/camera-setup.png)
 
-1. Enable HDR or Advanced Color management in Windows as appropriate for your display.
+1. Enable HDR in Windows display settings. Calibration and Apply require HDR on the selected display.
 2. Place the camera close to the center of the screen. The center reference patch should fill the camera's view.
-3. Select your camera and display, enter the panel peak brightness (default 1,000 nits), then click **New calibration**.
-4. Review the results, then click **Apply system wide**.
+3. Select your camera and display, enter the panel peak brightness (default 1,000 nits), then click **New calibration** or **Express calibration**.
+4. Review the results, then click **Apply**.
 5. Optionally enable **Start with Windows** to apply the filter at sign-in and stay in the system tray.
 
 Calibration data is stored in `%LOCALAPPDATA%\OledCalibration\data`.
+Use **Refine** to add more refinement rounds to a saved calibration. **Delete all data** disables the filter and startup, deletes application data, caches and logs, then exits. Locked files are removed at restart.
 
 ## Existing features
 
 - **APL-dependent dimming compensation** with uniform linear brightness correction.
-- **PCA screen-content analysis** that captures distributions of colors and brightnesses.
+- **Color-distribution analysis** using a smoothed HSV distribution histogram (experimental).
 - **System-wide filtering** on the selected display through DWM.
 - **Automatic webcam calibration** after camera setup; no colorimeter required.
-- **Adaptive sampling and refinement** focused on dimming regions and validation errors.
+- **Adaptive sampling and refinement** focused on dimming regions and low-confidence neighborhoods.
 - **Single executable**, with no Python runtime dependency.
 - **System tray and startup support:** closing the window keeps the app in the tray.
 
@@ -45,16 +46,16 @@ Launch `build/single/OledCalibration.exe`. Current hook support targets Windows 
 
 - **DWM hooks:** intercept composed frames using a hook derived from [dwm_lut](https://github.com/ledoge/dwm_lut), preserving graphics state and an uncorrected frame cache.
 - **Display subsampling:** analyze an aspect-aware grid: Quality ~60,000 cells, Balanced ~25,000, Performance ~10,000, or Custom.
-- **3D color histogram:** map linear BT.2020 samples into a soft 8 ? 8 ? 8 RGB histogram, retaining mixed-color distributions.
-- **PCA generation:** learn 14 components from representative and synthetic histograms, then freeze the basis during calibration.
-- **Adaptive gamut sampling:** begin with vertices, edge and face centers, grayscale points, spaced interior colors, and clustered mixtures; refine poorly covered or inaccurate regions.
+- **Color statistics:** map pixel populations into soft HSV bins and smooth hue, saturation and brightness independently.
+- **Distribution interpolation:** compare smoothed histograms and combine measured brightness gains with a cubic exponential distance weight.
+- **Adaptive gamut sampling:** begin with an HSV/brightness/window grid, skip measured flat regions, then refine low-confidence distributions.
 - **Correction model:** fit measured relative brightness gains and apply one scene-dependent multiplier in linear light.
 
 ![Example measured gamut-space sampling](assets/documentation/gamut-sampling.png)
 
 *Example color distributions from a completed calibration, viewed from two angles.*
 
-See the [full filter design](docs/filter-design.md), [PCA model](docs/histogram-pca.md), and [adaptive sampling](docs/gamut-sampling.md) for implementation details and limitations.
+See the [full filter design](docs/filter-design.md), [current experimental model](docs/smoothed-hsv.md), and [adaptive sampling](docs/gamut-sampling.md) for implementation details and limitations.
 
 ## Development
 

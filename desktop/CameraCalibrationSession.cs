@@ -5,7 +5,7 @@ namespace OledCalibration;
 
 static partial class ManagedCalibration
 {
-    sealed class CameraCalibrationSession(string root, string monitor, string camera, Action<Process?> track, bool mosaic = false) : IAsyncDisposable
+    sealed class CameraCalibrationSession(string root, string monitor, string camera, Action<Process?> track, Action<string> log, bool mosaic = false) : IAsyncDisposable
     {
         Process? process;
         readonly string requestPath = Path.Combine(root, "build", "camera-request-" + Guid.NewGuid().ToString("N"));
@@ -20,13 +20,18 @@ static partial class ManagedCalibration
                 var companion = Path.Combine(AppContext.BaseDirectory, "hdr-probe.exe");
                 if (!File.Exists(companion))
                     companion = Path.Combine(root, "build", "hdr-probe.exe");
-                var start = new ProcessStartInfo(companion) { WorkingDirectory = root, UseShellExecute = false };
+                var start = new ProcessStartInfo(companion) { WorkingDirectory = root, UseShellExecute = false, RedirectStandardOutput = true };
                 start.ArgumentList.Add("--calibration-session");
                 start.ArgumentList.Add(requestPath);
                 start.Environment["OLED_CALIBRATION_DISPLAY"] = monitor;
                 start.Environment["OLED_CALIBRATION_CAMERA"] = camera;
                 start.Environment["OLED_CALIBRATION_MOSAIC"] = mosaic ? "1" : "0";
-                process = Process.Start(start) ?? throw new Exception("Camera tool could not start");
+                process = new Process { StartInfo = start };
+                process.OutputDataReceived += (_, e) => {
+                    if (e.Data?.StartsWith("WARNING:", StringComparison.Ordinal) == true) log(e.Data);
+                };
+                if (!process.Start()) throw new Exception("Camera tool could not start");
+                process.BeginOutputReadLine();
                 track(process);
             }
             if (process.HasExited)

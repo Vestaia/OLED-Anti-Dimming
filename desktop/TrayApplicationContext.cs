@@ -43,6 +43,7 @@ sealed class TrayApplicationContext : ApplicationContext
             catch (Exception error)
             {
                 tray.ShowBalloonTip(5000, "OLED Anti-Dimming", "Could not apply the filter: " + error.Message, ToolTipIcon.Warning);
+                MessageBox.Show(error.Message, "OLED calibration", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 window.RefreshFilterStatus();
             }
         });

@@ -303,8 +303,14 @@ struct CameraPreparation
         }
         if (stage == Reference)
         {
-            target = y;
-            noise = se;
+            readings.push_back(y);
+            if (readings.size() < 20) return;
+            target = std::accumulate(readings.begin(), readings.end(), 0.) / readings.size();
+            double squared = 0;
+            for (size_t i = 1; i < readings.size(); ++i)
+                squared += std::pow(readings[i] - readings[i - 1], 2);
+            noise = std::sqrt(squared / (2 * (readings.size() - 1)));
+            log("Sync reference=" + std::to_string(target) + " noise=" + std::to_string(noise) + " tolerance=max(0.5% reference, 4x noise)");
             valid = true;
             stage = Idle;
             status = "Camera ready";

@@ -7,7 +7,9 @@ longer generated or displayed. RMS and maximum errors are calculated from
 drifted references. These percentages describe relative camera brightness, not
 absolute luminance or a linear camera-to-light conversion. Empty measurements
 display a dash rather than zero error. Existing reports are recalculated from
-their validation CSV when opened.
+their validation CSV when opened. Current runs use fullscreen photograph
+benchmarks for this summary, reporting predictions before absorbing their
+camera-matched corrections into the saved model.
 
 Closing the window hides it in the tray and leaves active calibration running.
 Double-clicking the icon or choosing Open restores it. Launching a second copy

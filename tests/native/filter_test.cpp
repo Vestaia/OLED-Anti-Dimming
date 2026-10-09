@@ -68,10 +68,13 @@ int main(int argc, char **argv)
             weights.seekg(76);
             std::vector<float> model(filter.config.count * 16);
             weights.read((char *)model.data(), model.size() * 4);
-            auto evaluate = [&](double value)
+            auto evaluate = [&](double value, bool mixedBrightness = false, bool mixedColors = false)
             {
                 for (size_t i = 0; i < pixels.size(); i += 4)
-                    pixels[i] = pixels[i + 1] = pixels[i + 2] = float(value * 250 / 80);
+                {
+                    bool left = (i / 4) % d.Width < d.Width / 2;
+                    for(int j=0;j<3;j++)pixels[i+j]=float(value * (mixedColors ? ((left ? j==0 : j==2) ? 2 : 0) : mixedBrightness ? (left ? .5 : 1.5) : 1) * 250 / 80);
+                }
                 ctx->UpdateSubresource(scene.Get(), 0, nullptr, pixels.data(), d.Width * 16, 0);
                 filter.prepare(device.Get(), ctx.Get(), scene.Get(), scene.Get(), nullptr, 0, nullptr,
                                0, true, sampler.Get());
@@ -95,26 +98,58 @@ int main(int argc, char **argv)
                                     double(value > .75)};
                 if (filter.config.pad)
                 {
-                    double histogram[512]{};
-                    double coordinate = (std::min)(7., sqrt((std::max)(value, 0.) / 40.) * 7);
-                    int lower = (std::min)(6, int(coordinate));
-                    double t = coordinate - lower;
-                    for (int k = 0; k < 8; k++)
+                    std::vector<double> histogram(filter.config.histogramBins);
+                    double blockWeight = filter.config.histogramBins > 512 && filter.config.histogramBins != 9216 ? .5 : 1;
+                    int axis = filter.config.histogramBins == 5120 ? 16 : 8;
+                    int colorBins = filter.config.histogramBins == 9216 ? 9216 : axis * axis * axis, brightnessBins = filter.config.histogramBins - colorBins;
+                    for (int mode = 0; mode < (mixedBrightness || mixedColors ? 2 : 1); mode++)
                     {
-                        int r = k & 1, g = (k >> 1) & 1, b = (k >> 2) & 1;
-                        histogram[(lower + r) * 64 + (lower + g) * 8 + lower + b] =
-                            round((r ? t : 1 - t) * (g ? t : 1 - t) * (b ? t : 1 - t) * 4096.) /
-                            4096.;
+                        double intensity = value * (mixedBrightness ? (mode == 0 ? .5 : 1.5) : 1);
+                        double share = mixedBrightness || mixedColors ? .5 : 1;
+                        double color[3]{intensity,intensity,intensity};
+                        if(mixedColors){double r=mode==0?2*value:0,b=mode==1?2*value:0;color[0]=.627404*r+.0433136*b;color[1]=.069097*r+.0113612*b;color[2]=.0163916*r+.895595*b;}
+                        if(filter.config.histogramBins==9216) {
+                            double r=(std::max)(0.,color[0]),g=(std::max)(0.,color[1]),b=(std::max)(0.,color[2]);
+                            double value=(std::max)(r,(std::max)(g,b)), delta=value-(std::min)(r,(std::min)(g,b));
+                            double hue=delta==0?0:(value==r?(g-b)/delta:value==g?2+(b-r)/delta:4+(r-g)/delta);
+                            hue=hue/6-floor(hue/6);
+                            double sat=value>0?delta/value:0;
+                            double x[3]{hue*9,sat*sat*7,(std::min)(1.,sqrt(value/40))*127};
+                            int lo[3]{int(x[0]),(std::min)(6,int(x[1])),(std::min)(126,int(x[2]))};
+                            double t[3]{x[0]-lo[0],x[1]-lo[1],x[2]-lo[2]};
+                            for(int k=0;k<8;k++) {
+                                int dh=k&1,ds=(k>>1)&1,dv=(k>>2)&1,si=lo[1]+ds,hi=si==0?0:(lo[0]+dh)%9;
+                                histogram[(hi*8+si)*128+lo[2]+dv]+=share*(dh?t[0]:1-t[0])*(ds?t[1]:1-t[1])*(dv?t[2]:1-t[2]);
+                            }
+                        } else {
+                        int lower[3];double t[3];
+                        for(int j=0;j<3;j++){double coordinate=(std::min)(double(axis-1),sqrt((std::max)(color[j],0.)/40.)*(axis-1));lower[j]=(std::min)(axis-2,int(coordinate));t[j]=coordinate-lower[j];}
+                        for (int k = 0; k < 8; k++)
+                        {
+                            int r = k & 1, g = (k >> 1) & 1, b = (k >> 2) & 1;
+                            histogram[(lower[0] + r) * axis * axis + (lower[1] + g) * axis + lower[2] + b] += share *
+                                round((r ? t[0] : 1-t[0]) * (g ? t[1] : 1-t[1]) * (b ? t[2] : 1-t[2]) * blockWeight * 4096.) / 4096.;
+                        }
+                        }
+                        if (filter.config.histogramBins > 512 && filter.config.histogramBins != 9216)
+                        {
+                            double brightness = (std::min)(double(brightnessBins-1), sqrt((std::max)(.2627*color[0]+.6780*color[1]+.0593*color[2],0.)/40.)*(brightnessBins-1));
+                            int low = (std::min)(brightnessBins-2,int(brightness));
+                            double fraction = brightness-low;
+                            histogram[colorBins+low] += share * round((1-fraction)*2048.)/4096.;
+                            histogram[colorBins+low+1] += share * round(fraction*2048.)/4096.;
+                        }
                     }
-                    histogram[0] -= 1;
+                    histogram[0] -= blockWeight;
+                    if (filter.config.histogramBins > 512 && filter.config.histogramBins != 9216) histogram[colorBins] -= .5;
                     std::ifstream basisFile(folder + L"\\runtime.bin", std::ios::binary);
                     basisFile.seekg(76 + filter.config.count * 64);
-                    std::vector<float> basis(512 * 16);
+                    std::vector<float> basis(filter.config.histogramBins * 16);
                     basisFile.read((char *)basis.data(), basis.size() * 4);
                     for (int j = 0; j < 14; j++)
                     {
                         features[j] = 0;
-                        for (int bin = 0; bin < 512; bin++)
+                        for (int bin = 0; bin < int(filter.config.histogramBins); bin++)
                             features[j] += histogram[bin] * basis[bin * 16 + j];
                     }
                 }
@@ -149,6 +184,9 @@ int main(int argc, char **argv)
                     filter.partialGroups != filter.config.groupsX * filter.config.groupsY)
                     throw std::runtime_error("Sampling grid bounds or allocation mismatch");
             }
+            filter.samplingCells = d.Width * d.Height;
+            evaluate(.4, true);
+            evaluate(.4, false, true);
             filter.samplingCells = 25000;
         }
 

@@ -1,15 +1,30 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 #include "match.hpp"
+#include <limits>
+
+struct MatchProgress {
+    double previousError = std::numeric_limits<double>::infinity();
+    int stagnant = 0;
+    bool stalled(double error, double tolerance) {
+        if (error < previousError - tolerance / 16) stagnant = 0;
+        else ++stagnant;
+        previousError = error;
+        return stagnant >= 4;
+    }
+};
 
 // PI-like control in log signal. Camera codes supply ordering and a measured
 // local slope, never a luminance ratio. The caller enforces the measured delay
 // plus response horizon before feeding back each applied command.
 struct ContinuousMatcher : ObservationMatcher
 {
+    MatchProgress progress;
     double integral = 0, previousSignal = 0, previousObserved = 0, slope = 20;
     int plateauConfirmations = 0;
     double gainScale = 1, stepLimit = .25;
+    double lastError = 0;
+    bool haveError = false;
     Result update(double observed, double target, double tolerance, double dt = .2)
     {
         double error = target - observed;
@@ -17,11 +32,11 @@ struct ContinuousMatcher : ObservationMatcher
         if (previousSignal > 0)
         {
             double delta = logSignal - std::log(previousSignal);
-            if (std::abs(delta) > .015)
+            if (std::abs(delta) > .0002 && std::abs(observed - previousObserved) > tolerance)
             {
                 double measured = (observed - previousObserved) / delta;
                 if (measured > 1 && std::isfinite(measured))
-                    slope = .5 * slope + .5 * std::clamp(measured, 1., 500.);
+                    slope = .25 * slope + .75 * std::clamp(measured, 1., 500.);
             }
         }
         previousSignal = trial;
@@ -31,6 +46,20 @@ struct ContinuousMatcher : ObservationMatcher
             integral = 0;
             return Matched;
         }
+        // Tune damping using only observations of commands whose measured
+        // delay/response horizon has elapsed. Never integrate stale frames.
+        if (haveError)
+        {
+            if (lastError * error < 0 || std::abs(error) > std::abs(lastError) * 1.05)
+            {
+                gainScale = std::max(.2, gainScale * .6);
+                integral = 0;
+            }
+            else if (std::abs(error) < std::abs(lastError) * .85)
+                gainScale = std::min(1.3, gainScale * 1.12);
+        }
+        lastError = error;
+        haveError = true;
         double floor = std::max(.12, tolerance * .5);
         if (observed > bestObserved + floor)
         {
@@ -51,6 +80,7 @@ struct ContinuousMatcher : ObservationMatcher
             if (plateauConfirmations >= 2)
                 return Saturated;
         }
+        if (progress.stalled(std::abs(error), tolerance)) return Limit;
         if (++iterations > 45)
             return Limit;
         if (error > 0)
@@ -61,7 +91,7 @@ struct ContinuousMatcher : ObservationMatcher
         integral =
             std::clamp(integral + error * std::clamp(dt, .02, 1.), -slope * .25, slope * .25);
         double step =
-            std::clamp(gainScale * (.65 * error + .08 * integral) / slope, -stepLimit, stepLimit);
+            std::clamp(gainScale * (.8 * error + .02 * integral) / slope, -stepLimit, stepLimit);
         double next = std::clamp(logSignal + step, std::log(.0001), std::log(10000.));
         if (low > 0 && high > 0)
         {
@@ -75,10 +105,11 @@ struct ContinuousMatcher : ObservationMatcher
     }
 };
 
-// Final control uses one non-overlapping, settled three-frame observation per
+// Final control uses one non-overlapping, settled single-frame observation per
 // command. No integral state carries over from the fast controller.
 struct FineWindowMatcher : ObservationMatcher
 {
+    MatchProgress progress;
     int flatWindows = 0;
     double step = .002;
     Result update(double observed, double target, double tolerance)
@@ -106,6 +137,7 @@ struct FineWindowMatcher : ObservationMatcher
                     return Saturated;
             }
         }
+        if (progress.stalled(std::abs(observed - target), tolerance)) return Limit;
         if (observed < target)
             low = trial;
         else
@@ -126,6 +158,10 @@ struct FineWindowMatcher : ObservationMatcher
 
 inline void fineWindowMatcherSelfTest()
 {
+    MatchProgress stalled;
+    for (int i=0;i<4;i++)
+        if (stalled.stalled(1., .04)) throw std::runtime_error("Progress stopped too early");
+    if (!stalled.stalled(1., .04)) throw std::runtime_error("Progress did not stop after four adjustments");
     for (double gamma : {.35, 1., 2.2})
     {
         FineWindowMatcher controller;
@@ -133,12 +169,9 @@ inline void fineWindowMatcherSelfTest()
         bool matched = false;
         for (int window = 0; window < 30; window++)
         {
-            // Different frame noise, averaged only while this command is held.
-            double sum = 0;
-            for (int frame = 0; frame < 3; frame++)
-                sum += 60 * std::pow(controller.trial / 100, gamma) + .02 * (frame == 1 ? -1 : 1);
+            double observed = 60 * std::pow(controller.trial / 100, gamma) + .02 * (window % 2 ? -1 : 1);
             double previous = controller.trial;
-            auto result = controller.update(sum / 3, 60, .175);
+            auto result = controller.update(observed, 60, .175);
             if (std::abs(std::log(controller.trial / previous)) > .005001)
                 throw std::runtime_error("Final correction exceeded half percent");
             if (result == ObservationMatcher::Matched)

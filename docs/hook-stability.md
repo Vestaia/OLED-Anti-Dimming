@@ -52,7 +52,7 @@ offset 0x266b3d while toggling during Cyberpunk performance testing. No usable
 crash dump was found, so the exact crashing instruction's cause is unconfirmed.
 
 The previous implementation remotely called FreeLibrary, followed by MinHook
-teardown and COM releases under DllMain/loader lock. It also leaked PS b1/t2?t5,
+teardown and COM releases under DllMain/loader lock. It also leaked PS b1/t2-t5,
 render-target, vertex/raster and other pipeline state into DWM. Both are concrete
 hazards addressed here; this is not a claim that either was proven as the cause.
 

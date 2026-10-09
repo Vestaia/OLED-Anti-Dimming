@@ -35,3 +35,9 @@ checks failed-disable retention, verifies that the callback payload is unmapped,
 and calls the bridge after unloading to check restored-entry forwarding. Overlay
 register-preservation tests remain mandatory. These checks do not inject into DWM;
 live apply/disable/video testing remains a separate hardware check.
+
+Bridge rebuilds normalize PE header, export-directory, and debug-directory
+linker timestamps. The GUI compares resident bridge identity with those fields
+normalized, so older equivalent bridge builds are reusable without sign-out.
+All other bytes, including code and export contents, must match. Separate builds
+are checked for byte-identical normalized bridge output.

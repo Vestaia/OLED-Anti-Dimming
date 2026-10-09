@@ -1,5 +1,13 @@
 # Filter design
 
+The current experimental calibration uses the [smoothed HSV model](smoothed-hsv.md).
+The details below describe earlier compatible models.
+
+
+The current experimental calibration uses the [smoothed HSV model](smoothed-hsv.md).
+The details below describe earlier compatible models.
+
+
 The system learns a monitor's response to a **distribution of pixel colors**,
 then predicts one brightness gain for the current composed scene. It does not
 infer a panel's physical RGB/white-subpixel drive algorithm or assume additive
@@ -8,10 +16,10 @@ treating a mixture of saturated colors as an equivalent uniform gray.
 
 ```mermaid
 flowchart LR
-    D[DWM composed frame] --> S[128 × 64 pixel samples]
-    S --> H[Soft 8 × 8 × 8 RGB histogram]
-    H --> P[14 fixed PCA components]
-    P --> M[Learned correction model]
+    D[DWM composed frame] --> S[Aspect-aware pixel samples]
+    S --> H[Continuous circular HSV coordinates]
+    H --> C[Eight weighted clusters; brightness x10]
+    C --> M[Gaussian-kernel distribution interpolation]
     M --> G[Uniform linear brightness gain]
     D --> G
     G --> O[Display output]
@@ -34,51 +42,42 @@ pixels outside the current damage region. Enable and disable invalidate the
 desktop, and re-enable rebuilds the model and frame cache on the compositor thread.
 
 The graphics pass saves and restores DWM's full D3D11 context state. Hook control
-and mutable state are serialized. The DLL remains pinned; Disable removes the
-detours without freeing callback code or trampolines. The `OverlaysEnabled`
+and mutable state are serialized. A small unload bridge remains resident; Disable drains callbacks, removes the
+detours and releases the main payload, allowing a changed filter DLL to load. The `OverlaysEnabled`
 wrapper also preserves volatile registers relied on by DWM's internal leaf-call
 optimizations. See [hook stability](hook-stability.md) for evidence and limits.
 
-### Display subsampling and three-dimensional histogram
+### Display subsampling and distribution encoding
 
-Each frame uses a user-selected sampling density: Quality targets 60,000 cells,
-Balanced (default) 25,000, Performance 10,000, and Custom 256 to 1,000,000.
+Each frame uses a user-selected aspect-aware grid: Quality about 60,000 cells,
+Balanced about 25,000, Performance about 10,000, or Custom 256 to 1,000,000.
 Grid width is rounded from `sqrt(cells * width / height)`; height is rounded
-from `cells / grid_width`. Dimensions are capped at the source texture size.
-The preview uses the selected display aspect ratio; runtime uses the actual
-DWM texture aspect ratio. Apply system-wide activates the selected setting;
-it is saved alongside the selected model and restored at startup. This is a
-spatial approximation: small features can be missed, and moving content can
-slightly alter the sampled distribution.
+from `cells / grid_width`, capped at texture dimensions. Small features may
+be missed. No CPU image readback is introduced.
 
-HDR scRGB samples are converted to linear BT.2020 for analysis, using 80 nits per
-scRGB unit. The SDR path decodes sRGB and uses its reference-white scale. Each
-channel is encoded as `sqrt(max(channel_nits, 0) / 10000)`, then assigned to an
-**8 × 8 × 8 joint RGB histogram**. Trilinear weighting distributes mass among the
-eight neighboring bins, reducing discontinuities at bin boundaries. Encoding
-bounds affect the descriptor only; they do not clamp rendered highlights.
+HDR scRGB is converted to linear BT.2020 using 80 nits per unit. SDR is decoded
+from sRGB. Reference-normalized circular HSV uses four coordinates:
+`S^2 cos(H)/sqrt(3)`, `S^2 sin(H)/sqrt(3)`, `S^2 sqrt(2/3)`, and
+`B sqrt(V/10000)`, where B is about 34.52 and V is the maximum linear RGB channel in nits.
+Statistical domain limits do not clamp rendered signals.
 
-The GPU builds one histogram per 16 ? 16 sampling workgroup in workgroup-local shared memory using integer
-atomics, then reduces them. The normalized histogram preserves multimodal
-distributions and relative population weights. It deliberately discards spatial
-layout and temporal history; it cannot represent layout-sensitive or long-term
-panel protection behavior.
+Eight weighted k-means clusters are fitted for eight iterations after actual-scene
+farthest-point initialization. Final assignment computes population and RMS
+spread at the final centers. Forty-eight descriptor values retain eight centers,
+populations and spreads; a further value records exact non-black coverage. Exact pattern raster populations, including the mosaic
+probe and black surrounding pixels, are used during calibration; runtime uses
+its sampling grid. Histogram/PCA generation is no longer needed for new models.
+Old PCA calibrations remain loadable.
 
-### PCA generation and correction inference
+### Correction inference
 
-Before camera acquisition, the application creates histograms for planned
-patterns and deterministic synthetic distributions bounded by the selected panel
-peak. It mean-centers these training histograms and uses orthogonal power
-iteration on their covariance to learn **14 principal components**. This step
-requires no camera labels. The basis is frozen across acquisition and refinement.
-
-At runtime, the GPU projects the scene histogram relative to an all-black
-histogram onto the exported basis. A normalized inverse-distance (Shepard) model blends measured log gains
-in scaled PCA coordinates and predicts the
-correction. An explicit black anchor establishes the baseline. The prediction
-is converted to a gain of at least one; CPU and GPU encoders and inference are
-checked for agreement. PCA is lossy: distributions indistinguishable in these
-14 components can still produce different panel responses.
+The correction model interpolates measured log gains using normalized inverse
+seventh-power distance weights. Squared distance uses Gaussian-kernel MMD between weighted k-means components,
+including their isotropic RMS spread. No explicit window-size cost is added.
+Equivalent component splits preserve distance; eight components remain an approximation.
+See [color-clusters.md](color-clusters.md) for bandwidth and reference normalization.
+Exact duplicate measured states share one contribution with averaged log gains. An all-black unity-gain
+anchor remains. See [color clusters](color-clusters.md) for format and limitations.
 
 ### Adaptive gamut-space calibration
 
@@ -97,28 +96,21 @@ color populations with varying spreads and unequal bright/dim weights, including
 colors, clustered/image distributions, and the center reference mosaic. It is
 an illustration of sampled colors, not a luminance measurement or accuracy claim.*
 
-Coarse window sweeps proceed from large areas toward smaller areas and skip known
-flat regions. Fresh validation candidates include arbitrary single gamut points
-and clustered distributions at new window sizes. Coverage scores prioritize
-empty regions in color space and histogram/PCA space without measuring every
-candidate. Failed, stable checks generate nearby new areas, brightnesses, or
-distribution variants; they are added to the training set, with separate local
-holdouts. Refinement starts at the current model prediction rather than unity.
-The PCA basis stays fixed while the correction model is refitted.
-
-Refinement stops locally when matching errors are small, the panel response
-plateaus, or the configured round limit is reached. A final global validation
-checks for regressions. The current 1% threshold is relative camera-code error
-with a noise floor, not 1% measured luminance. Remaining errors are recorded
-rather than silently declared converged. See [gamut sampling](gamut-sampling.md).
+Coarse window sweeps run from large to small areas, retaining inferred unity-gain
+anchors when flatness permits skipping. Refinement generates novel distributions
+and selects low-confidence neighborhoods: nearby samples raise confidence,
+while local gain slopes lower it. No measurement-error ranking is used for new
+sample selection. Training updates the native online model continuously.
+Validation freezes it for each pass, then adds stable validation labels to training.
+Three refinement rounds remain the default. See [gamut sampling](gamut-sampling.md).
 
 ### Relative camera matching and output correction
 
 The center reference is a fine pixel mosaic with nominal mean 100 nits, whose
-contribution is included in the scene histogram. Surrounding content changes
+contribution is included in the scene distribution. Surrounding content changes
 while the reference location remains fixed. Camera samples average a broad
-detected region within the patch. Exposure and white balance remain fixed during
-a measurement phase; exposure may be retuned between phases.
+detected region within the patch. Exposure and white balance remain fixed throughout a session. Periodic reference
+checks update the target and warn about substantial brightness drift.
 
 A binary brightness sequence measures end-to-end latency and response settling.
 Feedback waits for the measured response and uses fresh settled frames. Coarse
@@ -134,10 +126,9 @@ no software panel-peak clamp. Windows owns ICC/VCGT processing; the application
 does not install a separate color transform. Current calibration targets PQ;
 custom EOTFs and roll-offs remain planned work.
 
-The GPU performs analysis, inference, and application without a per-frame CPU
-readback. Full-frame copying and filtering still have a cost. Existing isolated
-RTX 4070 Ti measurements were approximately 133–148 microseconds per complete
-1440p test frame; the target of less than 5% GPU cost at 500 Hz has not been
-demonstrated under application contention. Idle clocks and live DWM workloads
-must be considered when measuring performance.
-
+The GPU performs analysis, inference and application without frame readback.
+Copying, clustering, transport matching and rendering still have costs. The earlier
+60k-sample/eight-iteration microbenchmark took about 100 microseconds at normal
+clocks, excluding actual-scene seeding, final spread calculation, transport
+inference and rendering. It is not a total-filter performance claim. The 5% budget
+at 1440p/500 Hz remains an optimization target; idle clocks and contention matter.

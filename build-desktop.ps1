@@ -33,5 +33,7 @@ if errorlevel 1 exit /b 1
 $batch | Set-Content -LiteralPath "$projectRoot\build\desktop-compile.cmd" -Encoding ascii
 & cmd.exe /c "$projectRoot\build\desktop-compile.cmd"
 if ($LASTEXITCODE -ne 0) { throw 'Desktop native build failed' }
+python "$projectRoot/tools/normalize_bridge.py"
+if ($LASTEXITCODE -ne 0) { throw 'Bridge normalization failed' }
 dotnet build "$projectRoot\desktop\OledCalibration.csproj" -c Release -o "$projectRoot\$DesktopOutput"
 if ($LASTEXITCODE -ne 0) { throw '.NET GUI build failed' }

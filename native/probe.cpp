@@ -861,9 +861,11 @@ int main(int argc, char **argv)
                                                          : "Probe shader compilation failed");
                 probeErrors.Reset();
             }
+            onlineTrainingSelfTest();
             flatSweepSelfTest();
             phaseClockSelfTest();
             matcherSelfTest();
+            referenceTrackerSelfTest();
             continuousMatcherSelfTest();
             fineWindowMatcherSelfTest();
             timingSelfTest();

@@ -189,13 +189,13 @@ long long COverlayContext_Present_hook_24h2(void* self,void* overlay,unsigned in
 # Toggle callbacks without unmapping executing code. All mutable hook state is
 # serialized; graphics/model reload happens only on the compositor render thread.
 source=source.replace('#include "adaptive_filter.hpp"','#include "adaptive_filter.hpp"\n#include "dwm_context_state.hpp"\n#include <mutex>\nstd::recursive_mutex filterMutex;\nbool filterEnabled=true;\nextern "C" __declspec(dllexport) volatile LONG OledFilterState=1;\nbool filterReload=false;\nDwmContextState dwmState;\nextern "C" __declspec(dllexport) DWORD WINAPI OledFilterControl(void* command) {bool enable=command!=nullptr;{std::lock_guard<std::recursive_mutex> lock(filterMutex);filterEnabled=enable;filterReload=enable;}auto status=enable?MH_EnableHook(MH_ALL_HOOKS):MH_DisableHook(MH_ALL_HOOKS);bool ok=status==MH_OK||status==(enable?MH_ERROR_ENABLED:MH_ERROR_DISABLED);InterlockedExchange(&OledFilterState,ok?(enable?1:0):2);return ok?1:0;}')
-source=source.replace('if (IsLUTActive(self))','if (filterEnabled && IsLUTActive(self))')
+source=source.replace('if (IsLUTActive(self))','if (filterEnabled)')
 for signature in ['bool COverlayContext_IsCandidateDirectFlipCompatbile_hook_24h2(', 'bool COverlayContext_OverlaysEnabled_hook(']:
     start=source.index(signature);brace=source.index('{',start);source=source[:brace+1]+'\n    std::lock_guard<std::recursive_mutex> lock(filterMutex);'+source[brace+1:]
 source=source.replace('    bool applied=damage&&SafeDisplayCoreApply(overlay,damage->start,int(damage->end-damage->start));','''    bool applied=false;
     {
         std::lock_guard<std::recursive_mutex> lock(filterMutex);
-        if(filterEnabled&&damage) {
+        if(filterEnabled&&filterActivation.ready(GetTickCount64())&&damage) {
             if(damage->start==damage->end)
                 applied=SafeDisplayCoreApply(overlay,nullptr,0);
             else if(damage->start&&damage->end>=damage->start&&damage->end-damage->start<=16384)
@@ -276,5 +276,11 @@ source=source.replace('bool filterReload=false;', 'bool filterReload=false;bool 
 source=source.replace('lock(filterMutex);filterEnabled=enable;', 'lock(filterMutex);if(unloadRequested)return 0;filterEnabled=enable;')
 source=source.replace('lock(filterMutex);filterEnabled=false;}', 'lock(filterMutex);unloadRequested=true;filterEnabled=false;}')
 source=source.replace('if(!hookStatus(MH_EnableHook(MH_ALL_HOOKS),"Enable")){filterEnabled=false;InterlockedExchange(&OledFilterState,2);return FALSE;}', 'if(!hookStatus(MH_EnableHook(MH_ALL_HOOKS),"Enable")){filterEnabled=false;InterlockedExchange(&OledFilterState,2);if(bridgeClose(DisableForUnload)){MH_Uninitialize();return FALSE;}return TRUE;}')
+# Publish bypass denial before enabling callbacks. Start the rendering grace
+# period only after MinHook has enabled all hooks, including on reactivation.
+source=source.replace('#include <mutex>', '#include <mutex>\n#include "filter_activation.hpp"\nFilterActivation filterActivation;')
+source=source.replace('filterEnabled=enable;filterReload=enable;', 'filterEnabled=enable;filterReload=enable;filterActivation.reset();')
+source=source.replace('InterlockedExchange(&OledFilterState,ok?(enable?1:0):2);', '{std::lock_guard<std::recursive_mutex> lock(filterMutex);if(ok&&enable&&!unloadRequested)filterActivation.activate(GetTickCount64());}InterlockedExchange(&OledFilterState,ok?(enable?1:0):2);')
+source=source.replace('            hookLog("All three hooks installed; resident toggle API enabled");', '            {std::lock_guard<std::recursive_mutex> lock(filterMutex);filterActivation.activate(GetTickCount64());}\n            hookLog("All three hooks installed; 500 ms composition grace period started");')
 (root/'build/hook.cpp').write_text(source,encoding='utf-8')
 (root/'build/filter_shader.hpp').write_text('static const char* filterShader=R"APL('+ (root/'native/adaptive_filter.hlsl').read_text() +')APL";',encoding='utf-8')

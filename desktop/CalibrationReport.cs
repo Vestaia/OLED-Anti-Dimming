@@ -7,6 +7,8 @@ static partial class ManagedCalibration
 {
     public static void CorrectionHeatmap(string output, CalibrationModel model)
     {
+        var metadataPath=Path.Combine(output,"metadata.json");
+        CalibrationMetadata? metadata=File.Exists(metadataPath)?JsonSerializer.Deserialize<CalibrationMetadata>(File.ReadAllText(metadataPath)):null;
         double[] areas = [.02, .06, .10, .15, .18, .22, .26, .30, .34, .38, .42, .50, .60, .70, .80, .90, 1];
         var colors = new List<(string label, double[] rgb)> { ("R", [1, 0, 0]), ("G", [0, 1, 0]), ("B", [0, 0, 1]), ("White", [1, 1, 1]) };
         foreach (double nits in new[] { 25.0, 50, 75, 100, 150, 200, 350, 750 })
@@ -31,6 +33,7 @@ static partial class ManagedCalibration
             for (int a = 0; a < areas.Length; a++)
             {
                 var scene = new CalibrationScene { area = areas[a], moments = moments };
+                if(metadata!=null)StampProbe(metadata,[scene]);
                 double boost = 100 * (Math.Exp(model.Predict(scene)) - 1);
                 double strength = Math.Clamp(boost / 150, 0, 1);
                 using var brush = new SolidBrush(Color.FromArgb((int)(255 - 130 * strength), (int)(255 - 75 * strength), 255));
@@ -53,7 +56,7 @@ static partial class ManagedCalibration
         {
             var errors = rows.Where(row => row["role"] == role && lookup.ContainsKey(row["name"]))
                 .GroupBy(row => row["name"]).Select(group => group.Last())
-                .Where(row => ClosingError(closing, lookup[row["name"]]) <= .5)
+                .Where(row => ClosingError(closing, lookup[row["name"]]) <= .05)
                 .Select(row => RelativeBrightnessError(Value(row, "camera_code"), Value(row, "reference_code")))
                 .Where(double.IsFinite).ToArray();
             summary[role] = QualityMetrics(errors);

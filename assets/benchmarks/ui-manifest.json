@@ -1,0 +1,482 @@
+﻿[
+    {
+        "name":  "ui-files-light",
+        "file":  "ui-files-light.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "444138de9345b1b7bb9dbc63bbad37da43c4079a138776ce15b01bd71e0203e1",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-files-dark",
+        "file":  "ui-files-dark.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "2993907de6b20a5be1cb096932b4024d091a956215f9e43e1e5357c466fcc11c",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-files-cream",
+        "file":  "ui-files-cream.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "068962a3e494dd8374f4b6a6e04ecdc94d39e3b743f859a0ddf33283d400806a",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-files-blue",
+        "file":  "ui-files-blue.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "199ef73a0265c0b3a63087b81eebf29b957e04efc847361d0599194795fb510e",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-files-gray",
+        "file":  "ui-files-gray.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "c281557f375ef0199e52c1044d0606d7f1ffa8f121f04449026ce7bb8184608e",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-files-contrast",
+        "file":  "ui-files-contrast.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "9d263f9c871659c6419dde58f67cbdcbe79a7d115bcafa0c4cf67943a7369a8e",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-editor-light",
+        "file":  "ui-editor-light.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "2f66cd5abfa29d6173d327bc3a938ce1421f35ebe4afae27cb0b9c3aef7d59ae",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-editor-dark",
+        "file":  "ui-editor-dark.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "f53d263994cecde7f89de645c2decd945579ae133e0b479b2f48fa32e1df7203",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-editor-cream",
+        "file":  "ui-editor-cream.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "6702b93f9773a6a2db9a12572084f983cc46a97c8860093da2873db9c2cfd160",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-editor-blue",
+        "file":  "ui-editor-blue.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "49c0090cf6c219f1f7f8adbed400461dca3d118df65c0259b24c52b80ddef000",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-editor-gray",
+        "file":  "ui-editor-gray.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "56949c6eead6537d4f79a7453c8136c83968447b6491a53983290648927b5ed7",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-editor-contrast",
+        "file":  "ui-editor-contrast.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "63f9df0d7cc67a99878ddc6cdf3c9ae03a7ea66209bed3d9bad61a22dd30c67b",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-browser-light",
+        "file":  "ui-browser-light.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "ddd4961fc8a8ab8f0965644c6fb353966f558448382cd171098eac1bea985012",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-browser-dark",
+        "file":  "ui-browser-dark.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "63aaaaf2897a8a9fc3b30a14e3624e2120ec4af77b1b00514f31ed5f37fd3bde",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-browser-cream",
+        "file":  "ui-browser-cream.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "5fdfe0c809de3fd4ec842901657a472f1366ce0353fdfb1042381a58b5d26f25",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-browser-blue",
+        "file":  "ui-browser-blue.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "a1bf814cc6fb5a938e1a97291d2e7bc9ea5c3ea1787ea78e04b58669567d9414",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-browser-gray",
+        "file":  "ui-browser-gray.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "2a358a35ec6d496c33b62580e22516dc183e06fa49c45fb03f1a93d7de7d9a73",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-browser-contrast",
+        "file":  "ui-browser-contrast.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "0596398acba37427f5ecbaeac4314d8a166a6020b223fbbd6d3d75e0d3ba2e21",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-dashboard-light",
+        "file":  "ui-dashboard-light.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "15b8df290aa1e1dc26548a167af48fdcd3c8f4ca4216c4205d445d75222df920",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-dashboard-dark",
+        "file":  "ui-dashboard-dark.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "261a0f2fbdede895ae486d55de9cf74eef19685b7ba712f93210f5dc38306a8e",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-dashboard-cream",
+        "file":  "ui-dashboard-cream.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "82d83645edcdf985f9afda8ea4a72e57ce402e6fd10aac24295db998b21cfe15",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-dashboard-blue",
+        "file":  "ui-dashboard-blue.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "7c792486257b5f2208de143762af9e52e5b67bfeef9ba4da03dbb60ac791af08",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-dashboard-gray",
+        "file":  "ui-dashboard-gray.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "2805244ffd5919c5620325d42a0f190102df4d1a68513af063b99a18345fbf2e",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-dashboard-contrast",
+        "file":  "ui-dashboard-contrast.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "e1c2da7193e1bdfc8031c259d7591391b5f8d6b76aa726dc0fd3f93a8d03610c",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-spreadsheet-light",
+        "file":  "ui-spreadsheet-light.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "d6d511a6548b9e4431ca3d7ebc68fc1ece2cdab08120fcb60ae6754b416ec21d",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-spreadsheet-dark",
+        "file":  "ui-spreadsheet-dark.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "31f45d2a8e98c77d5e62e4790b21870b123462f8489f1f2ce7f50781bcd98b89",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-spreadsheet-cream",
+        "file":  "ui-spreadsheet-cream.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "db4ccb9036eb04ff9b4c80dd9d3486fcbdcc964a8797f3e980bb6af91ca9c8cd",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-spreadsheet-blue",
+        "file":  "ui-spreadsheet-blue.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "1b25656ed3048c04ee5f0a930ba29c029e96a13901ff0436f9f84592beefca0d",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-spreadsheet-gray",
+        "file":  "ui-spreadsheet-gray.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "67f604e61ec990698bd876ff468a89e49ee33a284482f333ed7694b90e45bd9c",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-spreadsheet-contrast",
+        "file":  "ui-spreadsheet-contrast.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "f0149a237302e5f13a531fb9cad8a985fe32286ccc67f020985be8ee93df35f5",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-chat-light",
+        "file":  "ui-chat-light.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "b578e3dbfb2d14dbe091d17fee91fca7afa7fa697d3e19c9e25fd5e2dc9e7c71",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-chat-dark",
+        "file":  "ui-chat-dark.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "667521d1405e909091c38b617000232cac048bac65ec1e5232999a1ef3e1e8da",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-chat-cream",
+        "file":  "ui-chat-cream.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "a4620d03f2e1307ef3fbe5cbdaf9fc57c3e76c0d6b03fac1bc69de52b3a1ed1e",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-chat-blue",
+        "file":  "ui-chat-blue.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "fc14ca40babe963458fce811316e1d6f47e0b64abd2d9e1e03d13775a59da952",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-chat-gray",
+        "file":  "ui-chat-gray.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "bbe603de42b99898b5183b43d79e07d6d2fdf59e7675280a77f8b51c8e5d2a1a",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-chat-contrast",
+        "file":  "ui-chat-contrast.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "f8403821e9a14dca2d8a7a2daac9f20cdbaa96b748892ed6bb07a304b1a331d5",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-settings-light",
+        "file":  "ui-settings-light.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "3d2fbb3db4181cff20640c2d16b2b51443de92510875b7295b7b1c00a93d66fd",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-settings-dark",
+        "file":  "ui-settings-dark.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "beb45fd6c6cf75214687a0ca7bcdcfafd4a7b1470f83e9f865b88a5eb349f3fe",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-settings-cream",
+        "file":  "ui-settings-cream.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "bba3271934705f783df40471ca3b3a9106fdc93ccd5f9d5b09d8c73c9a9a4fd1",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-settings-blue",
+        "file":  "ui-settings-blue.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "0bc53fab6a760651faf085191075db5446e825bb87ae3fef2b35a674f6ce0a12",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-settings-gray",
+        "file":  "ui-settings-gray.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "a55fa3e9a447a13e0045e357e14be9ecd234d304fce3e82f057b04793b7e0421",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-settings-contrast",
+        "file":  "ui-settings-contrast.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "39b950fd176d1da6b828f50bb91a2b98e3a5c0d089a3c5db135e2ffcf9ab99ac",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-desktop-light",
+        "file":  "ui-desktop-light.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "196da975830e39dd770160fb1d89130449ca055a532ef2081d8bbca119ae2605",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-desktop-dark",
+        "file":  "ui-desktop-dark.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "b266b535c881f4083a9152e823da37352a8118cbb7ba73bbf90ef68535e19444",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-desktop-cream",
+        "file":  "ui-desktop-cream.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "ae7395e21c055e90b4ae42b97d53fe2d6c36b974bb11521204662716be7f2269",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-desktop-blue",
+        "file":  "ui-desktop-blue.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "42c327ec26fa6ec608032f89110f361caea2f0b879dd18541deb494e6b0981b4",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-desktop-gray",
+        "file":  "ui-desktop-gray.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "49428063acf3dda8fe1c70feb9cbf02340bb6add5173221a29a7374d9ae33828",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    },
+    {
+        "name":  "ui-desktop-contrast",
+        "file":  "ui-desktop-contrast.png",
+        "author":  "OLED Anti-Dimming contributors",
+        "license":  "GPL-3.0-only",
+        "source":  "Original synthetic layout rendered by tools/generate_pca_ui.ps1",
+        "sha256":  "d3777dd52415f0aa83ee8995446fbbf07bce5f71583ce30c53219cf7ec058ea6",
+        "privacy":  "Synthetic placeholders only; no screen capture or user data",
+        "usage":  "Unlabeled PCA training fixture"
+    }
+]

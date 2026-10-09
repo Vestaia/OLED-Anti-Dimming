@@ -79,11 +79,28 @@ static class Backend
     }
     public static void WriteModel(string json, string binary)
     {
-        _ = CalibrationModel.Load(json);
+        var calibration = CalibrationModel.Load(json);
         using var document = JsonDocument.Parse(File.ReadAllText(json));
         var model = document.RootElement;
-        if (model.GetProperty("version").GetInt32() is not (1 or 2 or 3) || model.GetProperty("features").GetInt32() != 14)
+        if(calibration.SmoothHistogram) {
+            using var output=new BinaryWriter(File.Create(binary));
+            var smoothCenters=calibration.Centers;var gains=calibration.Coefficients;
+            output.Write(0x454c5041u);output.Write((uint)smoothCenters.Length);output.Write((float)calibration.PeakContentNits);output.Write(0f);output.Write(.3f);
+            for(int j=0;j<14;j++)output.Write(1f);
+            for(int row=0;row<smoothCenters.Length;row++){foreach(double value in smoothCenters[row])output.Write((float)value);output.Write((float)gains[row]);output.Write(0f);output.Write(0f);output.Write(0f);}
+            foreach(var matrix in SmoothedHsv.Matrices)foreach(double value in matrix){output.Write((float)value);output.Write(0f);output.Write(0f);output.Write(0f);}
+            return;
+        }
+        if (model.GetProperty("version").GetInt32() is not (2 or 3 or 4 or 5 or 6 or 7 or 8 or 9 or 10 or 11) || model.GetProperty("features").GetInt32() != (model.GetProperty("version").GetInt32()>=9?49:model.GetProperty("version").GetInt32()==8?49:model.GetProperty("version").GetInt32()==7?40:14))
             throw new Exception("Unsupported model version or features");
+        if(model.GetProperty("version").GetInt32() is 7 or 8 or 9 or 10 or 11) {
+            using var output=new BinaryWriter(File.Create(binary));
+            var clusters=model.GetProperty("centers").Deserialize<double[][]>()!;var gains=model.GetProperty("coefficients").Deserialize<double[]>()!;
+            output.Write(model.GetProperty("version").GetInt32()==11?0x424c5041u:model.GetProperty("version").GetInt32()==10?0x414c5041u:model.GetProperty("version").GetInt32()==9?0x394c5041u:model.GetProperty("version").GetInt32()==8?0x384c5041u:0x374c5041u);output.Write((uint)clusters.Length);output.Write(250f);output.Write(0f);output.Write(.3f);
+            for(int j=0;j<14;j++)output.Write(1f);
+            for(int row=0;row<clusters.Length;row++){foreach(double value in clusters[row])output.Write((float)value);output.Write((float)gains[row]);if(model.GetProperty("version").GetInt32()==11){output.Write(0f);output.Write(0f);}else if(model.GetProperty("version").GetInt32()>=9){output.Write((float)GaussianClusterKernel.Similarity(clusters[row],clusters[row]));output.Write(0f);}else for(int j=0;j<(model.GetProperty("version").GetInt32()==8?2:3);j++)output.Write(0f);}
+            return;
+        }
         var centers = model.GetProperty("centers").EnumerateArray().ToArray();
         var coefficients = model.GetProperty("coefficients").EnumerateArray().ToArray();
         if (centers.Length != coefficients.Length || centers.Length > 2048 || centers.Length == 0)
@@ -94,7 +111,7 @@ static class Backend
             throw new InvalidDataException("Create a new PCA calibration. This model has no histogram encoder.");
         if (model.GetProperty("version").GetInt32() == 2 && !histogram)
             throw new Exception("PCA model is missing its encoder");
-        f.Write(model.GetProperty("version").GetInt32() == 3 ? 0x334c5041u : 0x324c5041u);
+        f.Write(model.GetProperty("version").GetInt32() == 6 ? 0x364c5041u : model.GetProperty("version").GetInt32() == 5 ? 0x354c5041u : model.GetProperty("version").GetInt32() == 4 ? 0x344c5041u : model.GetProperty("version").GetInt32() == 3 ? 0x334c5041u : 0x324c5041u);
         f.Write((uint)centers.Length);
         foreach (var k in new[] { "peak", "baseline", "epsilon" })
             f.Write(model.GetProperty(k).GetSingle());
@@ -113,15 +130,18 @@ static class Backend
         if (histogram)
         {
             var basis = encoder.GetProperty("Basis").EnumerateArray().Select(r => r.EnumerateArray().Select(v => v.GetSingle()).ToArray()).ToArray();
-            if (basis.Length != 14 || basis.Any(r => r.Length != 512))
+            int bins = model.GetProperty("version").GetInt32() == 6 ? HistogramPca.Bins : model.GetProperty("version").GetInt32() == 5 ? HistogramPca.LegacyLargeBins : model.GetProperty("version").GetInt32() == 4 ? HistogramPca.LegacyCombinedBins : HistogramPca.LegacyColorBins;
+            if (basis.Length != 14 || basis.Any(r => r.Length != bins))
                 throw new Exception("Invalid histogram PCA basis");
-            for (int bin = 0; bin < 512; bin++)
+            for (int bin = 0; bin < bins; bin++)
                 for (int component = 0; component < 16; component++)
                     f.Write(component < 14 ? basis[component][bin] : 0f);
         }
     }
-    public static async Task Apply(string root, string model, bool hdr, Screen screen, Action<string> log, int samplingCells = 25000)
+    public static async Task Apply(string root, string model, Screen screen, Action<string> log, int samplingCells = 25000)
     {
+        await DeviceInventory.RequireHdr(root, screen.DeviceName);
+        const bool hdr = true;
         if (!File.Exists(model))
             throw new Exception("Load or generate a runtime calibration model first.");
         var saved = JsonDocument.Parse(File.ReadAllText(model)).RootElement;
@@ -165,7 +185,7 @@ static class Backend
         File.Copy(Path.Combine(stage, "profile.cube"), Path.Combine(luts, $"{screen.Bounds.Left}_{screen.Bounds.Top}{(hdr ? "_hdr" : "")}.cube"), true);
         var bridge = Path.Combine(runtime, "oled-hook-bridge.dll");
         var bridgeSource = Path.Combine(root, "build", "oled-hook-bridge.dll");
-        if (!File.Exists(bridge) || !System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(bridgeSource)).SequenceEqual(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(bridge))))
+        if (!File.Exists(bridge) || !BridgeBinary.Equivalent(bridgeSource, bridge))
         {
             try
             {
@@ -229,6 +249,9 @@ static class Backend
     }
     public static void Disable()
     {
+        // A normal-privilege camera-only session may proceed after a recorded
+        // successful unload. Enabled/uncertain states still require DWM access.
+        if (!new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator) && Injector.RecordedUnloaded()) return;
         if (Injector.IsLoaded())
         {
             Injector.Unload();
@@ -294,8 +317,15 @@ static class Injector
     static Exception Error(string operation) => new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), operation);
     static Process[] Targets() => Process.GetProcessesByName("dwm").Where(p => p.SessionId == Process.GetCurrentProcess().SessionId).ToArray();
     [DllImport("kernel32.dll", SetLastError = true)] static extern bool ReadProcessMemory(IntPtr process, IntPtr address, byte[] buffer, nuint size, out nuint read);
+    public static bool RecordedUnloaded()
+    {
+        try { return File.Exists(Marker) && File.ReadAllText(Marker).Trim()=="Disabled"; }
+        catch(IOException) { return false; }
+        catch(UnauthorizedAccessException) { return false; }
+    }
     public static FilterState GetStatus()
     {
+        if (!new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator) && RecordedUnloaded()) return FilterState.Disabled;
         var state = FilterState.NotLoaded;
         AsSystem(() =>
         {

@@ -2,6 +2,9 @@
 #include "continuous_match.hpp"
 #include "settling.hpp"
 #include "flat_sweep.hpp"
+#include "online_training.hpp"
+#include <limits>
+#include "reference_tracker.hpp"
 #pragma once
 struct MeasurementSession
 {
@@ -13,10 +16,18 @@ struct MeasurementSession
         double probeBase = 0;
         std::string group, family;
         double level = 0;
+        std::vector<double> state;
     };
     std::deque<Query> queue;
     Query current{};
+    ReferenceTracker referenceTracker;
+    std::string lastSampleName;
+    std::vector<Query> closingReferences;
+    OnlineTraining online;
     FlatSweep flatSweep;
+    HsvZeroRegions zeroRegions;
+    static bool isGrid(const Query& q){return q.family=="hsv-grid" || q.family=="hsv-grid-fixed-s";}
+    bool skipGrid(const Query& q,double area) const {return isGrid(q) && zeroRegions.skip(q.hue,q.saturation,q.level,area,q.family=="hsv-grid");}
     FlatSweep brightnessSweep; // Retained across phases in this camera session.
     bool rawSeen = false, matchFlat = false;
     double rawError = 0;
@@ -60,7 +71,10 @@ struct MeasurementSession
         std::string line;
         std::getline(input, line);
         queue.clear();
+        closingReferences.clear();
         flatSweep = {};
+        online.load(plan + ".online.bin");
+        std::ifstream stateInput;if(online.histogram){stateInput.open(plan+".states.bin",std::ios::binary);if(!stateInput)throw std::runtime_error("Histogram training states missing");}
         while (std::getline(input, line))
         {
             if (line.empty())
@@ -77,7 +91,7 @@ struct MeasurementSession
             std::getline(s, pbase, ',');
             std::getline(s, group, ',');
             std::getline(s, family, ',');
-            std::getline(s, level);
+            std::getline(s, level, ',');
             if (!group.empty() && group.back() == '\r')
                 group.pop_back();
             if (!asset.empty() && asset.back() == '\r')
@@ -88,6 +102,13 @@ struct MeasurementSession
                              v.empty() ? 100 : std::stod(v), asset,
                              pbase.empty() ? 0 : std::stod(pbase), group, family,
                              level.empty() ? 0 : std::stod(level)});
+            if(online.enabled && r=="match") {
+                queue.back().state.resize(online.dimensions);
+                if(online.histogram) {
+                    std::string coordinate;std::getline(s,coordinate,',');if(coordinate.empty())throw std::runtime_error("Missing histogram state index");
+                    auto index=std::stoull(coordinate);stateInput.seekg(index*online.dimensions*sizeof(double));stateInput.read((char*)queue.back().state.data(),online.dimensions*sizeof(double));if(!stateInput)throw std::runtime_error("Truncated histogram training states");
+                } else for(unsigned i=0;i<online.dimensions;i++){std::string coordinate;std::getline(s,coordinate,',');if(coordinate.empty())throw std::runtime_error("Missing online training coordinates");queue.back().state[i]=std::stod(coordinate);}
+            }
         }
         if (queue.empty())
             throw std::runtime_error("Calibration plan contains no measurements");
@@ -118,8 +139,7 @@ struct MeasurementSession
                 "codes\n";
         preparing = true;
         active = false;
-        preparation.target = 0;
-        preparation.begin(!roiReady);
+        if (!preparation.valid) { referenceTracker = {}; preparation.begin(!roiReady); }
         log("Calibration measurements: " + path);
     }
     void progress(const std::string &phase, int done)
@@ -193,11 +213,20 @@ struct MeasurementSession
                     window = query.area;
             }
             if (!flatSweep.skip(first.group, window) &&
-                !brightnessSweep.skipBrightness(first.family, first.level))
+                (isGrid(first) || !brightnessSweep.skipBrightness(first.family, first.level)) && !skipGrid(first,window))
                 break;
             current = first;
             current.area = window;
-            save(NAN, NAN, "skipped_flat");
+            for (const auto& query : queue) {
+                if (query.name != first.name) break;
+                if (query.role == "match") {
+                    current = query;
+                    if (online.enabled) online.observe(query.state, 250);
+                    break;
+                }
+            }
+            // Inferred unity gain is a training label, not a camera measurement.
+            save(NAN, NAN, "skipped_flat", 250);
             while (!queue.empty() && queue.front().name == first.name)
                 queue.pop_front();
             log("Skipping flat region: " + first.name);
@@ -207,17 +236,43 @@ struct MeasurementSession
             finish("PASS Calibration acquisition; observed comparisons saved");
             return;
         }
+        // All sweeps share the synchronized reference and fixed exposure.
+        if (queue.front().role == "reference") {
+            current = queue.front(); queue.pop_front();
+            if (online.enabled) online.beginSweep();
+            save(target, noise, "reference");
+            next(); return;
+        }
+        if (queue.front().role == "end_reference" && queue.size() > 1) {
+            closingReferences.push_back(queue.front()); queue.pop_front();
+            next(); return;
+        }
+        const auto& nextQuery = queue.front();
+        if ((nextQuery.role == "raw" || nextQuery.role == "predicted_adaptive" || nextQuery.role == "match") &&
+            nextQuery.name != lastSampleName && referenceTracker.due(GetTickCount64())) {
+            current = {"periodic-reference", "baseline", 0, 0, .01, 250, "", 100};
+            confirming = fineMode = plateauSearch = plateauVerify = false;
+            progress("Reference check", totalQueries - int(queue.size()));
+            display(250);
+            return;
+        }
         current = queue.front();
         queue.pop_front();
+        if(online.enabled && current.role=="reference")online.beginSweep();
+        if(online.enabled && current.role=="match")current.signal=250*std::exp(online.predict(current.state));
         confirming = fineMode = false;
         fineMatcher = {};
         previousControlError = 0;
         errorCrossings = 0;
         plateauSearch = plateauVerify = false;
         matcher = {};
-        if (current.role == "match")
+        if (current.role == "match") {
             matcher.slope = seedSlope;
+            if (online.enabled) { rawSeen = false; matchFlat = false; }
+        }
         matcher.trial = current.signal;
+        if (current.role == "raw" || current.role == "predicted_adaptive" || current.role == "match")
+            lastSampleName = current.name;
         if (current.role == "raw")
         {
             rawSeen = false;
@@ -228,34 +283,33 @@ struct MeasurementSession
         }
         if (current.role == "match")
             matchedArea = current.area;
-        if (current.role == "reference")
-        {
-            rawSeen = matchFlat = false;
-            rawError = 0;
-            matchedArea = 0;
-            exposureTries = 0;
-            target = 0;
-            baseline = current.signal;
-            noise = 0;
-        }
         progress(current.role == "reference" || current.role == "end_reference" ? "Reference"
                  : current.role == "match"                                      ? "Matching"
                                                                                 : "Measuring",
                  totalQueries - int(queue.size()) - 1);
         display(current.signal);
+        if (current.role == "match") save(NAN, noise, "match_seed");
     }
-    void save(double y, double se, const std::string &role)
+    void save(double y, double se, const std::string &role, double signal = NAN)
     {
         file << GetTickCount64() << ',' << current.name << ',' << current.hue << ','
-             << current.saturation << ',' << current.area << ',' << role << ',' << params.nits
+             << current.saturation << ',' << current.area << ',' << role << ',' << (std::isfinite(signal) ? signal : params.nits)
              << ',' << y << ',' << target << ',' << se << ',' << camera.exp << ',' << stimulus
              << ',' << params.probeNits << ',' << stableMs << ',' << settling.variation << ','
              << settling.drift << std::endl;
         ++completed;
     }
+    void updateReference(double value) {
+        double change = referenceTracker.level > 0 ? 100 * (value / referenceTracker.level - 1) : 0;
+        bool warning = referenceTracker.update(value, camera.arrival);
+        target = value;
+        preparation.target = value;
+        log(std::string(warning ? "WARNING: Reference brightness changed by " : "Reference brightness changed by ") +
+            std::to_string(change) + "%" + (warning ? "; possible camera exposure change. Reference updated; exposure setting unchanged." : "; reference updated."));
+    }
     double accuracyTolerance() const
     {
-        return current.name.rfind("neutral-fine-", 0) == 0 ? .175 : .35;
+        return std::max(4 * noise, .005 * std::abs(target));
     }
     void tick(ULONGLONG now)
     {
@@ -272,6 +326,11 @@ struct MeasurementSession
             {
                 preparing = false;
                 active = true;
+                target = preparation.target;
+                noise = preparation.noise;
+                exposure = preparation.exposure;
+                if (referenceTracker.level == 0) referenceTracker.update(target, now);
+                lastSampleName.clear();
                 next();
             }
             return;
@@ -316,13 +375,10 @@ struct MeasurementSession
             {
                 ++errorCrossings;
                 matcher.integral = 0;
-                matcher.gainScale = std::max(.2, 1. / (1 + errorCrossings));
                 matcher.stepLimit = std::max(.005, .25 * std::pow(.5, errorCrossings));
             }
             previousControlError = error;
-            if ((std::abs(error) / std::max(1., matcher.slope) <= .01 &&
-                 std::abs(error) <= std::max(1., 6 * noise)) ||
-                std::abs(error) <= accuracyTolerance())
+            if (std::abs(error) <= accuracyTolerance())
             {
                 fineMode = true;
                 confirming = true;
@@ -341,7 +397,7 @@ struct MeasurementSession
             }
             save(score, noise * std::sqrt(3.), "control_frame");
             auto result = matcher.update(score, current.role == "range" ? 255. : target,
-                                         std::max(accuracyTolerance(), 6 * noise),
+                                         accuracyTolerance(),
                                          double(camera.arrival - stimulus) / 1000);
             if (result == ObservationMatcher::More)
             {
@@ -417,35 +473,6 @@ struct MeasurementSession
         // Use the latest settled frame. History serves only to detect settling.
         double y = score;
         double se = settling.values.size() >= 3 ? settling.variation / std::sqrt(2.) : noise;
-        if (current.role == "reference")
-        {
-            long e = camera.exp;
-            if (y < 25)
-                e += camera.estep;
-            if (y > 90 || p99 > 180 || clipped > .001)
-                e -= camera.estep;
-            e = std::min(e, -5L);
-            if (camera.exposureApi && e != camera.exp && e >= camera.emin && e <= camera.emax &&
-                exposureTries++ < 5)
-            {
-                camera.exposure(e);
-                display(baseline);
-                extraWait = 400;
-                return;
-            }
-            if (y < 12 || p99 > 240 || clipped > .001)
-            {
-                save(y, se, "unusable_reference");
-                finish("Calibration acquisition incomplete: unusable camera range");
-                return;
-            }
-            target = y;
-            noise = se;
-            exposure = camera.exp;
-            save(y, se, "reference");
-            next();
-            return;
-        }
         if (camera.exp != exposure || clipped > .001)
         {
             finish("Calibration acquisition incomplete: clipping/exposure changed");
@@ -462,7 +489,7 @@ struct MeasurementSession
                 return;
             }
             double tolerance =
-                std::max(accuracyTolerance(), 3 * std::sqrt(noise * noise + se * se));
+                accuracyTolerance();
             auto result =
                 fineMode ? fineMatcher.update(y, current.role == "range" ? 255. : target, tolerance)
                          : (std::abs(y - (current.role == "range" ? 255. : target)) <= tolerance
@@ -501,18 +528,34 @@ struct MeasurementSession
                 return;
             }
             save(y, se, "matched");
+            if(online.enabled)online.observe(current.state,online.histogram && FlatSweep::smallCorrection(params.nits,250)?250:params.nits);
             matchFlat = FlatSweep::smallCorrection(params.nits, 250);
             matchedArea = current.area;
             save(y, se, "calibrated");
             bool flat =
-                rawSeen && matchFlat &&
-                rawError <= std::max({accuracyTolerance(), 3 * std::sqrt(noise * noise + se * se),
-                                      matcher.slope * std::log(1.01)});
+                matchFlat && (!rawSeen || rawError <= std::max(accuracyTolerance(), matcher.slope * std::log(1.01)));
             flatSweep.observe(current.group, current.area, flat);
-            brightnessSweep.observeBrightness(current.family, current.level, current.area, flat);
+            if(!isGrid(current))brightnessSweep.observeBrightness(current.family, current.level, current.area, flat);
+            if(flat && isGrid(current))zeroRegions.observe(current.hue,current.saturation,current.level,current.area);
             maxError = std::max(maxError, std::abs(y - target));
             next();
             return;
+        }
+        if (current.role == "baseline") {
+            save(y, se, "baseline");
+            updateReference(y);
+            next(); return;
+        }
+        if (current.role == "end_reference") {
+            save(y, se, "end_reference_check");
+            updateReference(y);
+            save(y, se, "end_reference");
+            for (const auto& reference : closingReferences) {
+                current = reference;
+                save(y, se, "end_reference");
+            }
+            closingReferences.clear();
+            next(); return;
         }
         save(y, se, current.role);
         if (current.role == "raw")
@@ -532,18 +575,7 @@ struct MeasurementSession
                     seedSlope = std::clamp(measured, 1., 500.);
             }
         }
-        if (current.role == "end_reference" && matchedArea > 0)
-        {
-            bool flat =
-                rawSeen && matchFlat && std::abs(y - target) <= .5 &&
-                rawError <= std::max({accuracyTolerance(), 3 * std::sqrt(noise * noise + se * se),
-                                      matcher.slope * std::log(1.01)});
-            flatSweep.observe(current.group, matchedArea, flat);
-            brightnessSweep.observeBrightness(current.family, current.level, matchedArea, flat);
-        }
-        if (current.role == "end_reference" &&
-            std::abs(y - target) > std::max(2., 3 * std::sqrt(noise * noise + se * se)))
-            log("Calibration reference drift for " + current.name + "; mark curve tentative");
+
         next();
     }
 } measurementSession;

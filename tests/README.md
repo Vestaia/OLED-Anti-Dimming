@@ -5,6 +5,8 @@ test programs, then checks:
 
 - Gamut geometry, aspect ratios, histogram mass, multimodal separation, PCA
   orthogonality, model round trips, invalid-model rejection, and binary export.
+- Continuous HSV cluster geometry, permutation/symmetry checks, exact mosaic
+  coverage, cluster model round trips and GPU/CPU population/spread/inference agreement.
 - Delayed/noisy nonlinear camera feedback, plateau detection, discrete final
   convergence, timing, and response settling without opening a camera.
 - GPU/CPU prediction agreement, shader compilation, single-threaded device

@@ -4,6 +4,17 @@
 #include <string>
 #include <stdexcept>
 #include <cmath>
+#include <vector>
+struct HsvZeroRegions {
+    struct Region {double hue,saturation,brightness,area;};
+    std::vector<Region> regions;
+    bool skip(double hue,double saturation,double brightness,double area,bool pruneLowerSaturation=true) const {
+        if(brightness==0)return true;
+        for(const auto& z:regions)if((saturation==0 || std::abs(hue-z.hue)<1e-6) && (pruneLowerSaturation?saturation<=z.saturation+1e-9:std::abs(saturation-z.saturation)<1e-9) && brightness<=z.brightness+1e-9 && area<=z.area+1e-9)return true;
+        return false;
+    }
+    void observe(double hue,double saturation,double brightness,double area){regions.push_back({hue,saturation,brightness,area});}
+};
 struct FlatSweep
 {
     static bool smallCorrection(double signal, double reference)
@@ -20,7 +31,7 @@ struct FlatSweep
     void observeBrightness(const std::string &family, double level, double area, bool flat)
     {
         if (!family.empty() && area >= .999999 && flat)
-            brightnessCutoffs[family] = std::max(brightnessCutoffs[family], level);
+            brightnessCutoffs[family] = (std::max)(brightnessCutoffs[family], level);
     }
     bool skipBrightness(const std::string &family, double level) const
     {
@@ -36,8 +47,7 @@ struct FlatSweep
             state.consecutive = 0;
         state.consecutive = flat ? state.consecutive + 1 : 0;
         state.lastArea = area;
-        if (state.consecutive >= 2)
-            state.cutoff = area;
+        state.cutoff = flat ? area : 0;
     }
     bool skip(const std::string &group, double area) const
     {
@@ -61,8 +71,8 @@ inline void flatSweepSelfTest()
         throw std::runtime_error("Partial area established a brightness cutoff");
     sweep.observe("white", 1, false);
     sweep.observe("white", .7, true);
-    if (sweep.skip("white", .4))
-        throw std::runtime_error("One flat sample stopped sweep");
+    if (!sweep.skip("white", .4))
+        throw std::runtime_error("One flat sample did not establish the lower zero region");
     sweep.observe("white", .4, true);
     if (!sweep.skip("white", .25) || sweep.skip("white", .4) || sweep.skip("red", .25) ||
         sweep.skip("", .25))
@@ -70,7 +80,9 @@ inline void flatSweepSelfTest()
     FlatSweep irregular;
     irregular.observe("x", 1, true);
     irregular.observe("x", .7, false);
-    irregular.observe("x", .4, true);
     if (irregular.skip("x", .25))
-        throw std::runtime_error("Nonflat response failed to reset confirmation");
+        throw std::runtime_error("Nonflat response failed to clear the zero region");
+    irregular.observe("x", .4, true);
+    if (!irregular.skip("x", .25))
+        throw std::runtime_error("Flat response did not restore the zero region");
 }
